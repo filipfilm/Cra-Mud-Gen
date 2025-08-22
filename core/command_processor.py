@@ -21,6 +21,10 @@ class CommandProcessor:
             "drop": r"^(drop|put down|leave)\s+(.+)\s*$",
             "use": r"^(use)\s+(.+)\s*$",
             "examine": r"^(examine|inspect|check)\s+(.+)\s*$",
+            "attack": r"^(attack|fight|kill)\s+(.+)\s*$",
+            "defend": r"^(defend|guard|block)\s*$", 
+            "flee": r"^(flee|run|escape)\s*$",
+            "heal": r"^(heal|use potion|drink potion)\s*$",
             "map": r"^(map|show map|read map|view map|m)\s*$",
             "stats": r"^(stats|status|exploration)\s*$"
         }
@@ -70,6 +74,19 @@ class CommandProcessor:
             
         elif re.match(self.commands["map"], user_input):
             return {"type": "map", "message": "Showing map"}
+            
+        elif re.match(self.commands["attack"], user_input):
+            target = re.match(self.commands["attack"], user_input).group(2)
+            return {"type": "combat_action", "action": "attack", "target": target}
+            
+        elif re.match(self.commands["defend"], user_input):
+            return {"type": "combat_action", "action": "defend"}
+            
+        elif re.match(self.commands["flee"], user_input):
+            return {"type": "combat_action", "action": "flee"}
+            
+        elif re.match(self.commands["heal"], user_input):
+            return {"type": "combat_action", "action": "heal"}
             
         elif re.match(self.commands["stats"], user_input):
             return {"type": "stats", "message": "Showing exploration stats"}
@@ -145,6 +162,18 @@ Available commands:
   examine <item>   - Examine an item (with ASCII art!)
   map/m            - Show the dungeon map
   stats            - Show exploration statistics
+  
+Combat commands:
+  attack <enemy>   - Attack an enemy in combat
+  defend/guard     - Take defensive stance (reduces damage)
+  flee/run         - Attempt to flee from combat
+  heal             - Use a healing potion if you have one
+  
+Conversation commands:
+  talk to <npc>    - Start a conversation with an NPC
+  hello <npc>      - Greet an NPC
+  goodbye          - End current conversation
+  
   help/h           - Show this help text
   quit/q           - Exit the game
   

@@ -3,7 +3,7 @@ Ollama LLM integration for the MUD game - using Mistral-Small
 """
 import requests
 import json
-from typing import Dict, Any, Optional
+from typing import Dict, Any, Optional, List
 
 class OllamaLLM:
     """
@@ -17,7 +17,7 @@ class OllamaLLM:
         
     def _check_model_availability(self) -> bool:
         """
-        Check if Ollama is running and Mistral model is available
+        Check if Ollama is running and the selected model is available
         """
         try:
             response = requests.get(f"{self.base_url}/api/tags", timeout=2)
@@ -25,20 +25,78 @@ class OllamaLLM:
                 models = response.json().get("models", [])
                 model_names = [m.get("name", "") for m in models]
                 
-                # Check for mistral-small specifically
-                if any("mistral-small" in name for name in model_names):
-                    print(f"✓ Mistral-Small model is ready for adventure!")
+                # Check for the specific model
+                if self.model_name in model_names:
+                    print(f"✓ {self.model_name} model is ready for adventure!")
                     return True
                 elif models:
-                    print(f"✗ Mistral-Small not found. Available models: {', '.join(model_names[:3])}")
-                    print(f"Please run: ollama pull mistral-small:22b")
+                    print(f"✗ {self.model_name} not found. Available models: {', '.join(model_names[:3])}")
                     return False
                 else:
-                    print(f"✗ No models found. Run: ollama pull mistral-small:22b")
+                    print(f"✗ No models found. Please install a model with: ollama pull <model-name>")
                     return False
         except:
             print("✗ Ollama not running. Start with: ollama serve")
             return False
+    
+    @staticmethod
+    def get_available_models(base_url: str = "http://localhost:11434") -> List[Dict]:
+        """
+        Get all available Ollama models with their details
+        """
+        try:
+            response = requests.get(f"{base_url}/api/tags", timeout=5)
+            if response.status_code == 200:
+                models = response.json().get("models", [])
+                
+                # Format model info for display
+                formatted_models = []
+                for model in models:
+                    name = model.get("name", "Unknown")
+                    size = model.get("size", 0)
+                    modified = model.get("modified_at", "Unknown")
+                    
+                    # Convert size to human readable
+                    if size > 1e9:
+                        size_str = f"{size / 1e9:.1f}GB"
+                    elif size > 1e6:
+                        size_str = f"{size / 1e6:.1f}MB"
+                    else:
+                        size_str = f"{size}B"
+                    
+                    # Parse model family for better descriptions
+                    model_family = name.split(':')[0].lower()
+                    descriptions = {
+                        "mistral": "Excellent for creative writing and storytelling",
+                        "llama": "Great general purpose model, good balance",  
+                        "codellama": "Optimized for code, may be verbose for stories",
+                        "gemma": "Google's model, good for factual content",
+                        "qwen": "Strong multilingual support and reasoning",
+                        "phi": "Microsoft's efficient small model",
+                        "tinyllama": "Very fast, basic responses",
+                        "neural-chat": "Optimized for conversation",
+                        "openhermes": "Fine-tuned for helpful responses",
+                        "wizardcoder": "Code-focused, may be technical for MUD",
+                        "deepseek": "Good reasoning capabilities",
+                        "starling": "Balanced performance model"
+                    }
+                    
+                    description = descriptions.get(model_family, "General purpose language model")
+                    
+                    formatted_models.append({
+                        "name": name,
+                        "size": size_str,
+                        "modified": modified,
+                        "family": model_family,
+                        "description": description,
+                        "recommended": model_family in ["mistral", "llama", "neural-chat", "openhermes"]
+                    })
+                
+                return sorted(formatted_models, key=lambda x: (not x["recommended"], x["name"]))
+            else:
+                return []
+        except:
+            return []
     
     def generate_response(self, prompt: str, context: Dict[str, Any] = None) -> str:
         """
@@ -74,13 +132,7 @@ class OllamaLLM:
                     "model": self.model_name,
                     "prompt": f"{system_message}\n\nRequest: {prompt}\n\nResponse:",
                     "stream": False,
-                    "options": {
-                        "temperature": 0.85,  # Slightly higher for Mistral's creativity
-                        "top_p": 0.92,
-                        "top_k": 40,
-                        "num_predict": 150,   # Token limit for responses
-                        "stop": ["\n\n", "Request:", "Response:"]  # Stop sequences
-                    }
+                    "options": self._get_model_options()
                 },
                 timeout=15  # Mistral might need a bit more time
             )
@@ -186,12 +238,7 @@ CRITICAL RULES:
                     "model": self.model_name,
                     "prompt": f"{system_prompt}\n\n{prompt}\n\nASCII Art:",
                     "stream": False,
-                    "options": {
-                        "temperature": 0.7,
-                        "top_p": 0.9,
-                        "num_predict": 200,
-                        "stop": ["\n\n\n", "Explanation:", "Note:"]
-                    }
+                    "options": self._get_model_options(art_mode=True)
                 },
                 timeout=15
             )
@@ -249,3 +296,72 @@ CRITICAL RULES:
         
         theme_fallbacks = fallbacks.get(theme, fallbacks["fantasy"])
         return theme_fallbacks.get(art_type, theme_fallbacks["decoration"])
+    
+    def _get_model_options(self, art_mode: bool = False) -> Dict[str, Any]:
+        """
+        Get optimized options based on the model type
+        """
+        model_family = self.model_name.split(':')[0].lower()
+        
+        # Base options for different model families
+        model_configs = {
+            "mistral": {
+                "temperature": 0.85,
+                "top_p": 0.92,
+                "top_k": 40,
+                "num_predict": 150 if not art_mode else 100,
+                "stop": ["\n\n", "Request:", "Response:"] if not art_mode else ["\n\n\n", "Explanation:", "Note:"]
+            },
+            "llama": {
+                "temperature": 0.8,
+                "top_p": 0.9,
+                "top_k": 40,
+                "num_predict": 120 if not art_mode else 80,
+                "stop": ["\n\n", "Human:", "Assistant:"] if not art_mode else ["\n\n\n", "Explanation:"]
+            },
+            "gemma": {
+                "temperature": 0.75,
+                "top_p": 0.9,
+                "top_k": 30,
+                "num_predict": 100 if not art_mode else 60,
+                "stop": ["\n\n", "User:", "Model:"] if not art_mode else ["\n\n\n"]
+            },
+            "phi": {
+                "temperature": 0.8,
+                "top_p": 0.85,
+                "top_k": 35,
+                "num_predict": 80 if not art_mode else 50,
+                "stop": ["\n\n"] if not art_mode else ["\n\n\n"]
+            },
+            "qwen": {
+                "temperature": 0.8,
+                "top_p": 0.9,
+                "top_k": 40,
+                "num_predict": 120 if not art_mode else 80,
+                "stop": ["\n\n", "Human:", "Assistant:"] if not art_mode else ["\n\n\n", "Explanation:"]
+            },
+            "neural-chat": {
+                "temperature": 0.85,
+                "top_p": 0.9,
+                "top_k": 40,
+                "num_predict": 130 if not art_mode else 90,
+                "stop": ["\n\n", "User:", "Assistant:"] if not art_mode else ["\n\n\n", "Note:"]
+            },
+            "tinyllama": {
+                "temperature": 0.9,
+                "top_p": 0.95,
+                "top_k": 50,
+                "num_predict": 60 if not art_mode else 40,
+                "stop": ["\n\n"] if not art_mode else ["\n\n\n"]
+            }
+        }
+        
+        # Get config for this model family, fallback to mistral config
+        config = model_configs.get(model_family, model_configs["mistral"])
+        
+        # Art mode adjustments
+        if art_mode:
+            config = config.copy()
+            config["temperature"] = max(0.3, config["temperature"] - 0.2)  # Lower temp for ASCII art
+        
+        return config

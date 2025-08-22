@@ -3,7 +3,8 @@ Main MUD Engine class that orchestrates the game flow
 """
 import sys
 import os
-from typing import Optional
+import random
+from typing import Optional, Dict
 
 # Add parent directory to path
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
@@ -11,7 +12,10 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspa
 from core.player import Player
 from core.world import World
 from ui.terminal_ui import TerminalUI
+from ui.combat_ui import CombatUI
 from core.command_processor import CommandProcessor
+from core.combat_system import CombatSystem
+from core.conversation_system import ConversationSystem
 from llm.llm_interface import LLMIntegrationLayer
 from core.map_system import MapSystem
 from core.context_manager import ContextManager
@@ -24,12 +28,50 @@ class GameEngine:
     def __init__(self):
         self.context_manager = ContextManager()  # Initialize context manager first
         self.player = Player()
-        self.llm = LLMIntegrationLayer()  # Initialize LLM integration
+        self.ui = TerminalUI()
+        self.combat_ui = CombatUI()
+        
+        # Model selection first
+        selected_model = self._select_model()
+        self.llm = LLMIntegrationLayer(model_name=selected_model)  # Initialize LLM with selected model
+        
         self.world = World(self.context_manager, self.llm.llm)  # Pass LLM to world for ASCII art
         self.command_processor = CommandProcessor()
-        self.ui = TerminalUI()
+        self.combat_system = CombatSystem()
+        self.conversation_system = ConversationSystem()
         self.map_system = MapSystem()  # Initialize mapping system
         self.game_over = False
+        
+        # Combat state
+        self.in_combat = False
+        self.current_enemies = []
+        
+        # Display control
+        self.suppress_room_display = False
+    
+    def _select_model(self) -> str:
+        """
+        Let user select which Ollama model to use
+        """
+        # Import here to avoid circular imports
+        from llm.ollama_llm import OllamaLLM
+        
+        try:
+            available_models = OllamaLLM.get_available_models()
+            if available_models:
+                return self.ui.get_model_selection(available_models)
+            else:
+                print("\n❌ No Ollama models found!")
+                print("Please install a model first. Popular options:")
+                print("  • ollama pull mistral           (7B - Good for storytelling)")
+                print("  • ollama pull llama3.1          (8B - Great general purpose)")
+                print("  • ollama pull gemma2:2b         (2B - Fast and lightweight)")
+                print("\nAfter installing a model, restart the game.")
+                sys.exit(0)
+        except Exception as e:
+            print(f"❌ Error connecting to Ollama: {e}")
+            print("Make sure Ollama is running: ollama serve")
+            sys.exit(0)
         
     def run(self):
         """
@@ -41,22 +83,36 @@ class GameEngine:
             
             # Main game loop
             while not self.game_over:
-                # Display current room state
-                current_room = self.world.get_room(self.player.location)
-                if current_room and not self.game_over:
-                    # Enhance room description with Mistral if available
-                    self._enhance_room_description(current_room)
-                    # Update map with room exits
-                    self.map_system.discover_room_exits(self.player.location, current_room.connections)
-                    self.ui.display_room(current_room, self.player)
+                # Display current room state (unless suppressed)
+                if not self.suppress_room_display:
+                    current_room = self.world.get_room(self.player.location)
+                    if current_room and not self.game_over:
+                        # Enhance room description with Mistral if available
+                        self._enhance_room_description(current_room)
+                        # Update map with room exits
+                        self.map_system.discover_room_exits(self.player.location, current_room.connections)
+                        self.ui.display_room(current_room, self.player)
+                    
+                    # Occasionally show ambient atmospheric effects
+                    self.ui.maybe_ambient_effect(self.player.theme)
+                else:
+                    # Reset the suppression flag
+                    self.suppress_room_display = False
                 
                 # Get user input
                 user_input = self.ui.get_input()
                 
                 # Process command
                 if user_input.strip():
-                    result = self.command_processor.parse(user_input, self.player, self.world)
-                    self._process_command_result(result)
+                    # First check if it's a conversation
+                    conversation_result = self.conversation_system.parse_conversation_input(user_input)
+                    
+                    if conversation_result["type"] != "not_conversation":
+                        self._handle_conversation(conversation_result)
+                        self.suppress_room_display = True
+                    else:
+                        result = self.command_processor.parse(user_input, self.player, self.world)
+                        self._process_command_result(result)
                 
         except KeyboardInterrupt:
             print("\nGame interrupted by user.")
@@ -89,6 +145,9 @@ class GameEngine:
         """
         Process the result of a command execution
         """
+        # Commands that should trigger room redisplay
+        redisplay_commands = {"movement", "look"}
+        
         if result["type"] == "exit":
             self.game_over = True
             self.ui.display_goodbye()
@@ -123,6 +182,9 @@ class GameEngine:
             # Generate and display enhanced movement message
             movement_text = self._generate_movement_text(result['direction'])
             self.ui.display_message(movement_text)
+            
+            # Check for enemy encounters in new room
+            self._check_for_enemies(result["new_location"])
         elif result["type"] == "look":
             current_room = self.world.get_room(self.player.location)
             if current_room:
@@ -167,15 +229,25 @@ Type 'map' to see your dungeon map!
             use_result = self._handle_use_item(result["item"])
             self.ui.display_message(use_result)
         elif result["type"] == "examine":
-            # Handle examining items with ASCII art
+            # Handle examining items with ASCII art and effects
             examine_result = self._handle_examine_item(result["item"])
-            self.ui.display_message(examine_result)
+            self.ui.display_examine_result(examine_result, result["item"], self.player.theme)
+        elif result["type"] == "combat_action":
+            # Handle combat actions
+            if self.in_combat:
+                self._handle_combat_action(result)
+            else:
+                self.ui.display_error("You are not in combat!")
         elif result["type"] == "narrative":
             # Send narrative commands to LLM for immersive responses
             narrative_response = self._generate_narrative_response(result["command"])
             self.ui.display_message(narrative_response)
         elif result["type"] == "invalid":
             self.ui.display_error(result["message"])
+        
+        # Suppress room display for all commands except those that should redisplay
+        if result["type"] not in redisplay_commands:
+            self.suppress_room_display = True
     
     def _display_game_state(self):
         """
@@ -515,3 +587,252 @@ Type 'map' to see your dungeon map!
         inventory_display += "\nType 'use <item>' to use an item, 'drop <item>' to drop it."
         
         return inventory_display
+    
+    def _check_for_enemies(self, room_id: str):
+        """Check for enemies when entering a new room"""
+        current_room = self.world.get_room(room_id)
+        if not current_room:
+            return
+            
+        # Check if player has been in this room before
+        has_been_visited = room_id in self.player.visited_rooms
+        
+        # Spawn enemies if appropriate
+        enemies = self.world.spawn_enemies_in_room(current_room, self.player.level, has_been_visited)
+        
+        if enemies:
+            self.current_enemies = enemies
+            self.in_combat = True
+            self.combat_ui.display_combat_start(enemies, self.player.name)
+            self._run_combat()
+    
+    def _run_combat(self):
+        """Main combat loop"""
+        combat_result = self.combat_system.start_combat(self.player, self.current_enemies)
+        
+        while self.in_combat and not self.game_over:
+            # Display combat status
+            self.combat_ui.display_combat_status(self.player, self.current_enemies)
+            self.combat_ui.display_combat_actions()
+            
+            # Get player action
+            action_input = self.combat_ui.prompt_combat_action(
+                [e for e in self.current_enemies if not e.is_dead]
+            )
+            
+            # Process player action
+            player_result = self._process_player_combat_action(action_input)
+            
+            if "flee_success" in player_result.get("effects", []):
+                self._end_combat(fled=True)
+                return
+            
+            # Check if combat is over
+            is_over, outcome = self.combat_system.is_combat_over(self.player, self.current_enemies)
+            if is_over:
+                self._end_combat(outcome)
+                return
+            
+            # Enemy turns
+            for enemy in self.current_enemies:
+                if not enemy.is_dead and not self.game_over:
+                    self._process_enemy_turn(enemy)
+                    
+                    # Check if player died
+                    is_over, outcome = self.combat_system.is_combat_over(self.player, self.current_enemies)
+                    if is_over:
+                        self._end_combat(outcome)
+                        return
+    
+    def _process_player_combat_action(self, action_input: str) -> Dict:
+        """Process player's combat action"""
+        # Parse the action using command processor
+        result = self.command_processor.parse(action_input, self.player, self.world)
+        
+        if result["type"] == "combat_action":
+            return self._handle_combat_action(result)
+        else:
+            self.ui.display_error("Invalid combat action!")
+            return {"effects": []}
+    
+    def _handle_combat_action(self, result: Dict):
+        """Handle a combat action"""
+        from core.combat_system import ActionType, CombatAction
+        
+        action_type = result["action"]
+        
+        if action_type == "attack":
+            target_name = result.get("target", "")
+            target = self._find_enemy_by_name(target_name)
+            
+            if target:
+                action = CombatAction(ActionType.ATTACK, target.name)
+                combat_result = self.combat_system.execute_turn(
+                    self.player, action, self.current_enemies
+                )
+                
+                # Display attack result
+                if combat_result["damage_dealt"] > 0:
+                    is_critical = "critical" in combat_result.get("effects", [])
+                    self.combat_ui.display_attack_result(
+                        self.player.name, target.name, combat_result["damage_dealt"], is_critical
+                    )
+                    
+                    if target.is_dead:
+                        self.combat_ui.display_death(target.name, False)
+                
+                return combat_result
+            else:
+                self.ui.display_error(f"Cannot find enemy: {target_name}")
+                return {"effects": []}
+                
+        elif action_type == "defend":
+            action = CombatAction(ActionType.DEFEND, "self")
+            combat_result = self.combat_system.execute_turn(
+                self.player, action, []
+            )
+            self.ui.display_message(f"{self.player.name} takes a defensive stance!")
+            return combat_result
+            
+        elif action_type == "flee":
+            action = CombatAction(ActionType.FLEE, "self") 
+            combat_result = self.combat_system.execute_turn(
+                self.player, action, []
+            )
+            if "flee_success" in combat_result.get("effects", []):
+                self.combat_ui.display_flee_success()
+            else:
+                self.combat_ui.display_flee_failure()
+            return combat_result
+            
+        elif action_type == "heal":
+            # Check for healing items in inventory
+            healing_items = [item for item in self.player.inventory if "potion" in item.lower()]
+            if healing_items:
+                item_name = healing_items[0]
+                from core.combat_system import HealthSystem
+                healing, description = HealthSystem.use_healing_item(item_name, self.player.level)
+                
+                actual_healing = self.player.heal(healing)
+                self.player.remove_from_inventory(item_name)
+                
+                self.combat_ui.display_healing(self.player.name, actual_healing)
+                return {"effects": ["healing"]}
+            else:
+                self.ui.display_error("You don't have any healing potions!")
+                return {"effects": []}
+    
+    def _process_enemy_turn(self, enemy):
+        """Process an enemy's combat turn"""
+        from core.combat_system import ActionType, CombatAction
+        
+        # Enemy AI chooses action
+        action_type = enemy.choose_action(self.player.current_health, self.player.level)
+        
+        if action_type == ActionType.ATTACK:
+            action = CombatAction(ActionType.ATTACK, self.player.name)
+            combat_result = self.combat_system.execute_turn(enemy, action, [self.player])
+            
+            # Display attack result
+            if combat_result["damage_dealt"] > 0:
+                is_critical = "critical" in combat_result.get("effects", [])
+                self.combat_ui.display_attack_result(
+                    enemy.name, self.player.name, combat_result["damage_dealt"], is_critical
+                )
+                
+                if self.player.is_dead:
+                    self.combat_ui.display_death(self.player.name, True)
+                    
+        elif action_type == ActionType.DEFEND:
+            action = CombatAction(ActionType.DEFEND, "self")
+            self.combat_system.execute_turn(enemy, action, [])
+            self.ui.display_message(f"{enemy.name} takes a defensive stance!")
+            
+        elif action_type == ActionType.FLEE:
+            # Enemy attempts to flee
+            if random.random() < 0.3:  # 30% chance for enemy to flee
+                self.ui.display_message(f"{enemy.name} flees from combat!")
+                enemy.is_dead = True  # Remove from combat
+    
+    def _find_enemy_by_name(self, target_name: str):
+        """Find enemy by name (case-insensitive partial match)"""
+        target_name_lower = target_name.lower()
+        for enemy in self.current_enemies:
+            if not enemy.is_dead and target_name_lower in enemy.name.lower():
+                return enemy
+        return None
+    
+    def _end_combat(self, outcome: str = "victory", fled: bool = False):
+        """End combat and handle rewards/consequences"""
+        self.in_combat = False
+        
+        if fled:
+            self.ui.display_message("You have fled from combat!")
+        elif outcome == "victory":
+            # Calculate rewards
+            defeated_enemies = [e for e in self.current_enemies if e.is_dead]
+            rewards = self.combat_system.calculate_rewards(defeated_enemies, self.player.level)
+            
+            # Apply rewards
+            self.player.stats["experience"] += rewards["experience"]
+            self.player.stats["gold"] += rewards["gold"]
+            
+            for item in rewards["loot"]:
+                if self.player.add_to_inventory(item):
+                    pass  # Successfully added
+                else:
+                    self.ui.display_message(f"Inventory full! {item} left behind.")
+            
+            # Check for level up
+            level_up_result = self.player.level_up_if_ready()
+            if level_up_result["leveled_up"]:
+                self.combat_ui.display_level_up(
+                    self.player.name,
+                    level_up_result["old_level"], 
+                    level_up_result["new_level"],
+                    [f"Health increased by {level_up_result['health_gained']}!"]
+                )
+            
+            # Display rewards
+            self.combat_ui.display_combat_victory(rewards)
+            
+        elif outcome == "defeat":
+            self.combat_ui.display_combat_defeat()
+            self.game_over = True
+        
+        # Clear combat state
+        self.current_enemies = []
+    
+    def _handle_conversation(self, conversation_result: Dict):
+        """Handle conversation with NPCs"""
+        if conversation_result["type"] == "start_conversation":
+            npc_name = conversation_result["npc"]
+            message = conversation_result["message"]
+            
+            # Start conversation
+            response = self.conversation_system.start_conversation(npc_name, message)
+            self.ui.display_message(response)
+            
+        elif conversation_result["type"] == "continue_conversation":
+            message = conversation_result["message"]
+            
+            # Continue existing conversation
+            current_npc = self.conversation_system.context.current_npc
+            if current_npc:
+                # Find the NPC object to continue conversation
+                npc_key = None
+                for key, npc in self.conversation_system.npcs.items():
+                    if npc.name == current_npc:
+                        npc_key = key
+                        break
+                
+                if npc_key:
+                    response = self.conversation_system._process_conversation(
+                        self.conversation_system.npcs[npc_key], 
+                        message
+                    )
+                    self.ui.display_message(response)
+                else:
+                    self.ui.display_message("The conversation seems to have ended.")
+            else:
+                self.ui.display_message("You're not currently talking to anyone.")

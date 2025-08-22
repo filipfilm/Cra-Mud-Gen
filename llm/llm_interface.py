@@ -111,11 +111,15 @@ class LLMIntegrationLayer:
     Integration layer that manages LLM connections and responses
     """
     
-    def __init__(self):
-        # Try to use Ollama first, fallback to mock
+    def __init__(self, model_name: str = None):
+        # Try to use Ollama with the specified model, fallback to mock
         if OLLAMA_AVAILABLE:
             try:
-                ollama_llm = OllamaLLM()
+                if model_name:
+                    ollama_llm = OllamaLLM(model_name=model_name)
+                else:
+                    ollama_llm = OllamaLLM()
+                    
                 if ollama_llm.is_available():
                     self.llm = ollama_llm
                     print("✓ Using Ollama for AI responses")

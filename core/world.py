@@ -11,6 +11,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspa
 
 from core.room import Room
 from core.theme_manager import ThemeManager
+from core.enemy_spawner import EnemySpawner
 
 class World:
     """
@@ -21,6 +22,7 @@ class World:
         self.rooms: Dict[str, Room] = {}
         self.theme = "fantasy"
         self.theme_manager = ThemeManager()
+        self.enemy_spawner = EnemySpawner()
         self.dungeon_layout = []
         self.context_manager = context_manager
         self.llm = llm  # LLM instance for ASCII art generation
@@ -121,6 +123,20 @@ class World:
         
         return room
     
+    def spawn_enemies_in_room(self, room: Room, player_level: int, has_been_visited: bool = False) -> List:
+        """
+        Spawn enemies in a room based on theme, room type, and player level
+        """
+        room_type = self._infer_room_type_from_description(room.description)
+        depth = self._get_room_depth(room.room_id)
+        
+        # Check if enemies should spawn
+        if self.enemy_spawner.should_spawn_enemy(has_been_visited, depth, player_level):
+            enemies = self.enemy_spawner.spawn_encounter(room_type, self.theme, player_level, depth)
+            return enemies
+        
+        return []
+    
     def _get_spatial_adjective(self, room_type: str, theme: str, adjectives: List[str]) -> str:
         """Get an adjective that fits the room type and theme"""
         
@@ -218,19 +234,30 @@ class World:
         """Get NPCs appropriate for the room type"""
         
         type_npcs = {
-            "library": ["wise librarian", "scholar"],
+            "library": ["wise librarian", "scholar", "fortune teller"],
             "shrine": ["holy priest", "temple guardian"],
-            "armory": ["weapon master", "guard"],
-            "chamber": ["noble lord", "court wizard"]
+            "armory": ["weapons master", "guard", "blacksmith"],
+            "chamber": ["noble lord", "court wizard", "weapons master"],
+            "forge": ["weapons master", "blacksmith"],
+            "tent": ["fortune teller", "merchant"],
+            "workshop": ["weapons master", "craftsman"]
         }
         
-        theme_npcs = self.theme_manager.get_theme_npcs(theme)
+        # Higher chance for specific NPCs that we have conversation systems for
+        conversation_npcs = ["weapons master", "fortune teller"]
+        
+        theme_npcs = self.theme_manager.get_theme_npcs(theme) if hasattr(self.theme_manager, 'get_theme_npcs') else []
         room_specific_npcs = type_npcs.get(room_type, [])
         
-        # Most rooms have a chance of NPCs, but not guaranteed
-        if random.random() < 0.3:  # 30% chance of NPC
+        # Increased chance of NPCs, especially conversation NPCs
+        if random.random() < 0.4:  # 40% chance of NPC
             all_possible_npcs = theme_npcs + room_specific_npcs
-            if all_possible_npcs:
+            
+            # Prefer conversation NPCs
+            available_conversation_npcs = [npc for npc in all_possible_npcs if npc in conversation_npcs]
+            if available_conversation_npcs and random.random() < 0.7:  # 70% chance to pick conversation NPC
+                return [random.choice(available_conversation_npcs)]
+            elif all_possible_npcs:
                 return [random.choice(all_possible_npcs)]
         
         return []
@@ -539,3 +566,31 @@ class World:
                 return simple_items[key]
         
         return simple_items["default"]
+    
+    def _infer_room_type_from_description(self, description: str) -> str:
+        """Infer room type from description text for enemy spawning"""
+        description_lower = description.lower()
+        
+        # Check for specific room type keywords
+        if any(word in description_lower for word in ["chamber", "hall", "room"]):
+            return "chamber"
+        elif any(word in description_lower for word in ["corridor", "hallway", "passage"]):
+            return "hallway"  
+        elif any(word in description_lower for word in ["cavern", "cave", "grotto"]):
+            return "cavern"
+        elif any(word in description_lower for word in ["tunnel", "shaft"]):
+            return "tunnel"
+        elif any(word in description_lower for word in ["library", "study", "archive"]):
+            return "library"
+        elif any(word in description_lower for word in ["stairs", "stairwell", "steps"]):
+            return "stairwell"
+        elif any(word in description_lower for word in ["shrine", "altar", "temple"]):
+            return "shrine"
+        elif any(word in description_lower for word in ["armory", "arsenal", "weapon"]):
+            return "armory"
+        elif any(word in description_lower for word in ["forest", "woods", "trees"]):
+            return "forest"
+        elif any(word in description_lower for word in ["grove", "clearing"]):
+            return "grove"
+        else:
+            return "chamber"  # Default fallback

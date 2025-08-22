@@ -2,22 +2,38 @@
 Player class to manage player state and information
 """
 from typing import List, Dict, Any
+from .combat_system import Combatant, HealthSystem, ExperienceSystem
 
-class Player:
+class Player(Combatant):
     """
-    Represents the player in the MUD game
+    Represents the player in the MUD game - now with combat capabilities
     """
     
     def __init__(self):
-        self.location = "start_room"
-        self.current_room_id = "start_room"
-        self.health = 100
-        self.inventory: List[str] = []
-        self.theme = "fantasy"  # Default theme
+        # Initialize MUD-specific attributes first
         self.stats: Dict[str, Any] = {
             "level": 1,
             "experience": 0,
             "gold": 0
+        }
+        
+        # Initialize combat stats 
+        super().__init__("Player", 100, 1)
+        
+        # More MUD-specific attributes
+        self.location = "start_room"
+        self.current_room_id = "start_room"
+        self.inventory: List[str] = []
+        self.theme = "fantasy"  # Default theme
+        
+        # Combat progression
+        self.combat_stats = {
+            "enemies_defeated": 0,
+            "total_damage_dealt": 0,
+            "total_damage_taken": 0,
+            "critical_hits": 0,
+            "battles_won": 0,
+            "battles_fled": 0
         }
         
         # Exploration tracking
@@ -25,6 +41,84 @@ class Player:
         self.rooms_discovered = 0
         self.exploration_points = 0
         self.visited_rooms.add("start_room")  # Mark starting room as visited
+    
+    @property
+    def health(self) -> int:
+        """Get current health for compatibility"""
+        return self.current_health
+    
+    @health.setter
+    def health(self, value: int):
+        """Set current health for compatibility"""
+        self.current_health = max(0, min(value, self.max_health))
+    
+    @property
+    def level(self) -> int:
+        """Get player level"""
+        return self.stats.get("level", 1)
+    
+    @level.setter
+    def level(self, value: int):
+        """Set player level"""
+        self.stats["level"] = value
+    
+    @property  
+    def gold(self) -> int:
+        """Get player gold"""
+        return self.stats.get("gold", 0)
+    
+    @property
+    def experience(self) -> int:
+        """Get player experience"""
+        return self.stats.get("experience", 0)
+    
+    def level_up_if_ready(self) -> Dict[str, Any]:
+        """Check if player should level up and handle it"""
+        current_level = self.stats["level"]
+        new_level = ExperienceSystem.calculate_level_from_exp(self.stats["experience"])
+        
+        if new_level > current_level:
+            # Level up!
+            self.stats["level"] = new_level
+            
+            # Update combat stats based on new level
+            old_max_health = self.max_health
+            self.max_health = HealthSystem.calculate_max_health(new_level)
+            health_gained = self.max_health - old_max_health
+            
+            # Heal on level up
+            self.current_health = min(self.current_health + health_gained, self.max_health)
+            
+            # Increase combat stats
+            self.attack = 10 + (new_level * 2)
+            self.defense = 5 + new_level
+            
+            return {
+                "leveled_up": True,
+                "old_level": current_level,
+                "new_level": new_level,
+                "health_gained": health_gained,
+                "new_max_health": self.max_health
+            }
+        
+        return {"leveled_up": False}
+    
+    def get_health_percentage(self) -> float:
+        """Get health as percentage for UI display"""
+        return (self.current_health / self.max_health) * 100
+    
+    def get_exp_progress(self) -> Dict[str, int]:
+        """Get experience progress information"""
+        current_exp = self.stats["experience"]
+        current_level = self.stats["level"]
+        
+        progress, needed = ExperienceSystem.exp_progress_to_next_level(current_exp, current_level)
+        return {
+            "current_exp": current_exp,
+            "progress": progress,
+            "needed": needed,
+            "percentage": int((progress / needed) * 100) if needed > 0 else 100
+        }
         
     def add_to_inventory(self, item: str) -> bool:
         """
