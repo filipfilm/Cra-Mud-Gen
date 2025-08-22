@@ -1,0 +1,31 @@
+# Requirements for Procedural MUD Game
+# This file lists the dependencies needed to run the game
+
+# Core Python libraries (usually included with Python 3.8+)
+# No additional core dependencies required
+
+# For terminal UI (optional, can be installed if needed)
+rich>=10.0.0
+prompt_toolkit>=3.0.0
+
+# For image generation (if using ComfyUI)
+requests>=2.25.0
+
+# For LLM integration (if using local models)
+# llama-cpp-python>=0.1.0  # Example for local LLMs
+# transformers>=4.0.0       # Example for Hugging Face models
+
+# For image handling (if needed)
+pillow>=8.0.0
+
+# For data validation
+pydantic>=1.0.0
+
+# For color support in terminal (if needed)
+colorama>=0.4.0
+
+# For JSON handling (already part of standard library)
+# json is part of Python's standard library
+
+# For testing
+pytest>=6.0.0  # Optional, for unit tests

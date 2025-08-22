@@ -1,0 +1,541 @@
+"""
+World class to manage the game world and dungeon generation
+"""
+import sys
+import os
+from typing import Dict, List, Optional
+import random
+
+# Add parent directory to path
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
+
+from core.room import Room
+from core.theme_manager import ThemeManager
+
+class World:
+    """
+    Represents the game world including dungeon layout and rooms
+    """
+    
+    def __init__(self, context_manager=None, llm=None):
+        self.rooms: Dict[str, Room] = {}
+        self.theme = "fantasy"
+        self.theme_manager = ThemeManager()
+        self.dungeon_layout = []
+        self.context_manager = context_manager
+        self.llm = llm  # LLM instance for ASCII art generation
+        
+    def generate_dungeon(self, theme: str):
+        """
+        Initialize the dungeon with just the starting room
+        """
+        self.theme = theme
+        
+        # Create only the starting room - everything else generated on demand
+        start_room = self.generate_starting_room(theme)
+        self.rooms["start"] = start_room
+    
+    def generate_starting_room(self, theme: str) -> Room:
+        """
+        Generate the starting room with dynamic exits
+        """
+        description = f"You stand at the entrance of a {theme} dungeon. The air is thick with mystery and adventure awaits."
+        
+        # Starting room has 2-3 exits randomly
+        available_directions = ["north", "east", "south", "west"]
+        num_exits = random.randint(2, 3)
+        exits = random.sample(available_directions, num_exits)
+        
+        # Convert to room IDs
+        connections = [f"{direction}_1" for direction in exits]
+        
+        # Add ASCII art for starting room
+        if random.random() < 0.5:  # 50% chance for starting room art
+            ascii_art = self._generate_room_ascii_art("entrance", theme, "mysterious", "doorway")
+            if ascii_art:
+                description = f"{ascii_art}\n\n{description}"
+        
+        room = Room(
+            room_id="start",
+            description=description,
+            items=self._get_room_items("entrance", theme),
+            npcs=[],  # No NPCs in starting room
+            connections=connections
+        )
+        
+        return room
+        
+    def generate_room(self, room_id: str, theme: str, from_room: str = None, direction: str = None) -> Room:
+        """
+        Generate a single room procedurally with dynamic exits
+        """
+        # Parse room depth from ID (e.g., "north_3" means 3rd room north)
+        depth = self._get_room_depth(room_id)
+        
+        # Get spatially-aware room type
+        if self.context_manager and from_room:
+            room_type = self.context_manager.suggest_room_type(room_id, from_room, direction)
+        else:
+            room_types = self.theme_manager.get_theme_room_types(theme)
+            room_type = random.choice(room_types) if room_types else "chamber"
+        
+        # Get theme information
+        adjectives = self.theme_manager.get_theme_adjectives(theme)
+        nouns = self.theme_manager.get_theme_nouns(theme)
+        
+        # Select elements that make spatial sense
+        adjective = self._get_spatial_adjective(room_type, theme, adjectives)
+        noun = self._get_spatial_noun(room_type, theme, nouns)
+        
+        # Create spatially-consistent description
+        description = self._create_spatial_description(room_type, adjective, noun, theme, from_room, direction)
+        
+        # Get appropriate items and NPCs for this room type
+        items = self._get_room_items(room_type, theme)
+        npcs = self._get_room_npcs(room_type, theme)
+        
+        # Add special items at certain depths to encourage deep exploration
+        if depth > 0 and depth % 5 == 0:  # Every 5th depth level
+            special_items = self._get_depth_reward_items(depth, theme)
+            items.extend(special_items)
+        
+        # Rare chance of finding something very special in deep areas
+        if depth > 15 and random.random() < 0.1:
+            rare_items = self._get_rare_items(theme)
+            items.extend(rare_items)
+        
+        # Generate dynamic exits based on depth and layout rules
+        connections = self._generate_dynamic_exits(room_id, depth, direction)
+        
+        room = Room(
+            room_id=room_id,
+            description=description,
+            items=items,
+            npcs=npcs,
+            connections=connections
+        )
+        
+        # Add to context manager if available
+        if self.context_manager:
+            self.context_manager.add_room_context(room_id, description, items, npcs, theme, room_type)
+        
+        return room
+    
+    def _get_spatial_adjective(self, room_type: str, theme: str, adjectives: List[str]) -> str:
+        """Get an adjective that fits the room type and theme"""
+        
+        type_adjectives = {
+            "chamber": ["grand", "vast", "spacious", "echoing"],
+            "hallway": ["long", "narrow", "winding", "shadowy"],
+            "cavern": ["deep", "damp", "mysterious", "cavernous"],
+            "tunnel": ["narrow", "dark", "twisting", "confined"],
+            "library": ["quiet", "dusty", "ancient", "scholarly"],
+            "stairwell": ["steep", "spiraling", "stone", "ascending"],
+            "shrine": ["sacred", "holy", "blessed", "divine"],
+            "armory": ["organized", "martial", "steel-lined", "weapon-filled"]
+        }
+        
+        # Get room-type specific adjectives first
+        type_specific = type_adjectives.get(room_type, [])
+        if type_specific:
+            return random.choice(type_specific)
+        
+        # Fall back to theme adjectives
+        return random.choice(adjectives) if adjectives else "mysterious"
+    
+    def _get_spatial_noun(self, room_type: str, theme: str, nouns: List[str]) -> str:
+        """Get a noun that fits the room type"""
+        
+        type_nouns = {
+            "chamber": ["pillar", "statue", "altar", "brazier"],
+            "hallway": ["torch", "banner", "archway", "door"],
+            "cavern": ["stalactite", "crystal", "pool", "echo"],
+            "tunnel": ["support beam", "root", "stone", "passage"],
+            "library": ["book", "scroll", "tome", "manuscript"],
+            "stairwell": ["step", "railing", "landing", "torch"],
+            "shrine": ["offering", "candle", "relic", "prayer"],
+            "armory": ["weapon", "armor", "shield", "blade"]
+        }
+        
+        type_specific = type_nouns.get(room_type, [])
+        if type_specific:
+            return random.choice(type_specific)
+        
+        return random.choice(nouns) if nouns else "object"
+    
+    def _create_spatial_description(self, room_type: str, adjective: str, noun: str, 
+                                  theme: str, from_room: str, direction: str) -> str:
+        """Create a description that makes spatial sense"""
+        
+        base_descriptions = {
+            "chamber": f"You are in a {adjective} {room_type}. {noun.capitalize()}s line the walls.",
+            "hallway": f"You are in a {adjective} {room_type}. {noun.capitalize()}s illuminate the path ahead.",
+            "cavern": f"You are in a {adjective} {room_type}. {noun.capitalize()}s hang from the ceiling above.",
+            "tunnel": f"You are in a {adjective} {room_type}. {noun.capitalize()}s mark your passage.",
+            "library": f"You are in a {adjective} {room_type}. {noun.capitalize()}s fill countless shelves.",
+            "stairwell": f"You are in a {adjective} {room_type}. {noun.capitalize()}s guide your way.",
+            "shrine": f"You are in a {adjective} {room_type}. {noun.capitalize()}s rest upon the altar.",
+            "armory": f"You are in a {adjective} {room_type}. {noun.capitalize()}s are displayed on racks."
+        }
+        
+        base_description = base_descriptions.get(room_type, f"You are in a {adjective} {room_type}. {noun.capitalize()}s are scattered around.")
+        
+        # Randomly add ASCII art to room descriptions (30% chance)
+        if random.random() < 0.3:
+            ascii_art = self._generate_room_ascii_art(room_type, theme, adjective, noun)
+            if ascii_art:
+                base_description = f"{ascii_art}\n\n{base_description}"
+        
+        return base_description
+    
+    def _get_room_items(self, room_type: str, theme: str) -> List[str]:
+        """Get items appropriate for the room type"""
+        
+        type_items = {
+            "chamber": ["ornate chest", "crystal orb", "ancient rune stone"],
+            "hallway": ["rusty key", "faded painting", "torch"],
+            "cavern": ["glowing mushroom", "precious gem", "cave moss"],
+            "tunnel": ["mining pick", "lantern", "rope"],
+            "library": ["ancient tome", "scroll of wisdom", "quill pen"],
+            "stairwell": ["brass key", "worn banner"],
+            "shrine": ["blessed amulet", "holy water", "prayer beads"],
+            "armory": ["steel sword", "leather armor", "iron shield"]
+        }
+        
+        # Get theme items
+        theme_items = self.theme_manager.get_theme_items(theme)
+        room_specific_items = type_items.get(room_type, [])
+        
+        # Combine and randomly select
+        all_possible_items = theme_items + room_specific_items
+        num_items = random.randint(0, 2)
+        
+        if all_possible_items:
+            return random.sample(all_possible_items, min(num_items, len(all_possible_items)))
+        return []
+    
+    def _get_room_npcs(self, room_type: str, theme: str) -> List[str]:
+        """Get NPCs appropriate for the room type"""
+        
+        type_npcs = {
+            "library": ["wise librarian", "scholar"],
+            "shrine": ["holy priest", "temple guardian"],
+            "armory": ["weapon master", "guard"],
+            "chamber": ["noble lord", "court wizard"]
+        }
+        
+        theme_npcs = self.theme_manager.get_theme_npcs(theme)
+        room_specific_npcs = type_npcs.get(room_type, [])
+        
+        # Most rooms have a chance of NPCs, but not guaranteed
+        if random.random() < 0.3:  # 30% chance of NPC
+            all_possible_npcs = theme_npcs + room_specific_npcs
+            if all_possible_npcs:
+                return [random.choice(all_possible_npcs)]
+        
+        return []
+        
+    def get_room(self, room_id: str) -> Optional[Room]:
+        """
+        Get a room by its ID
+        """
+        return self.rooms.get(room_id)
+        
+    def get_room_by_location(self, location: str) -> Optional[Room]:
+        """
+        Get room by location string (alias for get_room)
+        """
+        return self.get_room(location)
+    
+    def _get_room_depth(self, room_id: str) -> int:
+        """
+        Get the depth of a room from its ID (e.g., 'north_3' returns 3)
+        """
+        if room_id == "start":
+            return 0
+        try:
+            parts = room_id.split("_")
+            return int(parts[-1]) if len(parts) > 1 else 1
+        except (ValueError, IndexError):
+            return 1
+    
+    def _generate_dynamic_exits(self, room_id: str, depth: int, came_from_direction: str) -> List[str]:
+        """
+        Generate dynamic exits based on room depth and procedural rules
+        """
+        directions = ["north", "south", "east", "west"]
+        
+        # Always have a way back (opposite of the direction we came from)
+        opposite_dir = self._get_opposite_direction(came_from_direction)
+        exits = []
+        
+        # Determine number of exits based on depth and randomness
+        # Much longer progression for extended gameplay
+        if depth <= 2:
+            # Near start, many connections
+            num_exits = random.randint(2, 3)
+        elif depth <= 5:
+            # Early exploration, still well connected
+            num_exits = random.randint(2, 3)
+        elif depth <= 10:
+            # Mid-game, moderate connections
+            num_exits = random.randint(1, 3)
+        elif depth <= 15:
+            # Getting deeper, some dead ends
+            num_exits = random.randint(1, 2)
+        elif depth <= 25:
+            # Deep exploration, more challenging
+            num_exits = random.randint(0, 2)
+        elif depth <= 40:
+            # Very deep, mostly linear paths
+            num_exits = random.randint(0, 1)
+        else:
+            # Ancient depths, rare connections
+            num_exits = random.randint(0, 1)
+        
+        # Reduce dead end chance for better flow
+        dead_end_chance = min(0.15, depth * 0.01)  # 1% per depth, max 15%
+        if random.random() < dead_end_chance:
+            num_exits = 0
+        
+        if num_exits == 0:
+            # Dead end - no exits forward
+            return []
+        
+        # Remove the direction we came from to avoid going backward
+        available_directions = [d for d in directions if d != opposite_dir]
+        
+        # Select random exits
+        exits = random.sample(available_directions, min(num_exits, len(available_directions)))
+        
+        # Add special room types that create longer paths
+        room_connections = []
+        for direction in exits:
+            next_depth = self._calculate_next_depth(depth, direction, room_id)
+            room_connections.append(f"{direction}_{next_depth}")
+        
+        # Occasionally add loops back to earlier areas (5% chance)
+        if depth > 3 and random.random() < 0.05:
+            loop_direction = random.choice(["north", "south", "east", "west"])
+            if loop_direction not in [e.split("_")[0] for e in room_connections]:
+                # Create a loop back to a shallower depth
+                loop_depth = random.randint(1, max(1, depth - 2))
+                room_connections.append(f"{loop_direction}_{loop_depth}")
+        
+        return room_connections
+    
+    def _calculate_next_depth(self, current_depth: int, direction: str, room_id: str) -> int:
+        """
+        Calculate next room depth with some variation for interesting paths
+        """
+        base_depth = current_depth + 1
+        
+        # 20% chance of staying at same depth (side passages)
+        if random.random() < 0.2:
+            return current_depth
+        
+        # 10% chance of going 2 levels deeper (steep descent)
+        if random.random() < 0.1:
+            return base_depth + 1
+        
+        # 5% chance of going back one level (ascending passage)
+        if current_depth > 1 and random.random() < 0.05:
+            return max(1, current_depth - 1)
+        
+        return base_depth
+    
+    def _get_opposite_direction(self, direction: str) -> str:
+        """
+        Get the opposite direction
+        """
+        if not direction:
+            return ""
+        
+        opposites = {
+            "north": "south",
+            "south": "north", 
+            "east": "west",
+            "west": "east",
+            "up": "down",
+            "down": "up"
+        }
+        return opposites.get(direction, "")
+    
+    def generate_room_on_demand(self, room_id: str, from_room_id: str, direction: str) -> Room:
+        """
+        Generate a room on demand when player tries to move there
+        """
+        if room_id in self.rooms:
+            return self.rooms[room_id]
+        
+        # Generate new room
+        new_room = self.generate_room(room_id, self.theme, from_room_id, direction)
+        self.rooms[room_id] = new_room
+        
+        return new_room
+    
+    def _get_depth_reward_items(self, depth: int, theme: str) -> List[str]:
+        """
+        Get special reward items for reaching certain depths
+        """
+        depth_rewards = {
+            "fantasy": {
+                5: ["enchanted compass", "glowing crystal"],
+                10: ["ancient map fragment", "magical lantern"],
+                15: ["elven cloak", "dwarven hammer"],
+                20: ["dragon scale", "phoenix feather"],
+                25: ["legendary sword fragment", "crown jewel"],
+                30: ["artifact of power", "ancient tome of secrets"],
+                35: ["divine relic", "staff of the archmage"],
+                40: ["world stone shard", "essence of eternity"]
+            },
+            "sci-fi": {
+                5: ["energy scanner", "data pad"],
+                10: ["plasma cell", "neural interface"],
+                15: ["quantum core", "gravity manipulator"],
+                20: ["alien artifact", "time crystal"],
+                25: ["reality anchor", "dimensional key"],
+                30: ["consciousness matrix", "universal translator"],
+                35: ["stellar engine fragment", "void walker device"],
+                40: ["cosmic string", "universe seed"]
+            },
+            "horror": {
+                5: ["cursed locket", "bone charm"],
+                10: ["forbidden journal", "ritual dagger"],
+                15: ["blood vial", "dark scripture"],
+                20: ["soul gem", "necronomicon page"],
+                25: ["demon's claw", "wraith essence"],
+                30: ["elder sign", "void heart"],
+                35: ["nightmare crown", "reality tear"],
+                40: ["cosmic horror relic", "sanity shard"]
+            },
+            "cyberpunk": {
+                5: ["neural chip", "encryption key"],
+                10: ["AI core fragment", "hologram projector"],
+                15: ["black ICE program", "corporate access card"],
+                20: ["memory bank", "quantum processor"],
+                25: ["consciousness backup", "reality glitch"],
+                30: ["system override code", "digital god fragment"],
+                35: ["matrix key", "virtual reality engine"],
+                40: ["cyber-singularity core", "digital infinity"]
+            }
+        }
+        
+        theme_rewards = depth_rewards.get(theme, depth_rewards["fantasy"])
+        return theme_rewards.get(depth, [])
+    
+    def _get_rare_items(self, theme: str) -> List[str]:
+        """
+        Get very rare items for deep exploration
+        """
+        rare_items = {
+            "fantasy": ["dragon egg", "wish ring", "time turner", "portal stone"],
+            "sci-fi": ["singularity device", "wormhole generator", "quantum consciousness", "reality manipulator"],
+            "horror": ["elder god essence", "sanity anchor", "nightmare fuel", "cosmic horror ward"],
+            "cyberpunk": ["AI singularity", "reality hack", "digital soul", "matrix override"]
+        }
+        
+        theme_rares = rare_items.get(theme, rare_items["fantasy"])
+        return [random.choice(theme_rares)] if theme_rares else []
+    
+    def _generate_room_ascii_art(self, room_type: str, theme: str, adjective: str, noun: str) -> str:
+        """
+        Generate ASCII art for room descriptions
+        """
+        if not self.llm or not hasattr(self.llm, 'generate_ascii_art'):
+            return self._fallback_room_ascii_art(room_type, theme)
+        
+        try:
+            # Create subjects based on room type and theme
+            art_subjects = {
+                "chamber": ["grand hall", "throne room", "crystal chamber"],
+                "hallway": ["long corridor", "stone passage", "arched hallway"], 
+                "cavern": ["mystical cave", "underground cavern", "crystal grotto"],
+                "tunnel": ["narrow tunnel", "stone passage", "underground path"],
+                "library": ["ancient library", "book chamber", "scroll room"],
+                "stairwell": ["spiral staircase", "stone steps", "winding stairs"],
+                "shrine": ["sacred altar", "holy shrine", "temple chamber"],
+                "armory": ["weapon hall", "armor room", "arsenal chamber"]
+            }
+            
+            subjects = art_subjects.get(room_type, ["mysterious room", "ancient chamber"])
+            subject = random.choice(subjects)
+            
+            # Generate ASCII art with 70% chance for banner, 30% for decoration
+            art_type = "banner" if random.random() < 0.7 else "decoration"
+            
+            return self.llm.generate_ascii_art(subject, theme, art_type)
+            
+        except Exception as e:
+            print(f"Error generating room ASCII art: {e}")
+            return self._fallback_room_ascii_art(room_type, theme)
+    
+    def _fallback_room_ascii_art(self, room_type: str, theme: str) -> str:
+        """
+        Fallback ASCII art for rooms when LLM is unavailable
+        """
+        theme_banners = {
+            "fantasy": {
+                "chamber": "+===================+\n|   GRAND CHAMBER   |\n+===================+",
+                "library": "+===================+\n|  ANCIENT LIBRARY  |\n+===================+",
+                "shrine": "+===================+\n|   SACRED SHRINE   |\n+===================+",
+                "default": "  * A mystical place *"
+            },
+            "sci-fi": {
+                "chamber": "+==================+\n| COMMAND CHAMBER  |\n+==================+",
+                "library": "+==================+\n|  DATA ARCHIVES   |\n+==================+",
+                "default": "  > A tech facility <"
+            },
+            "horror": {
+                "chamber": "+------------------+\n| CURSED CHAMBER   |\n+------------------+",
+                "library": "+------------------+\n| FORBIDDEN LIBRARY|\n+------------------+",
+                "default": "  ~ A dark place ~"
+            },
+            "cyberpunk": {
+                "chamber": "+==================+\n| NEURAL INTERFACE |\n+==================+",
+                "library": "+==================+\n|   DATA NEXUS     |\n+==================+",
+                "default": "  [ A digital space ]"
+            }
+        }
+        
+        theme_art = theme_banners.get(theme, theme_banners["fantasy"])
+        return theme_art.get(room_type, theme_art["default"])
+    
+    def generate_item_ascii_art(self, item_name: str, theme: str) -> str:
+        """
+        Generate ASCII art for items (called when items are examined)
+        """
+        if not self.llm or not hasattr(self.llm, 'generate_ascii_art'):
+            return self._fallback_item_ascii_art(item_name, theme)
+        
+        try:
+            # Generate object-type ASCII art for items
+            return self.llm.generate_ascii_art(item_name, theme, "object")
+        except Exception as e:
+            print(f"Error generating item ASCII art: {e}")
+            return self._fallback_item_ascii_art(item_name, theme)
+    
+    def _fallback_item_ascii_art(self, item_name: str, theme: str) -> str:
+        """
+        Fallback ASCII art for items
+        """
+        simple_items = {
+            "sword": "   /|\\\n  /_|_\\\n   \\|/",
+            "shield": "   ___\n  /   \\\n |  O  |\n  \\___/",
+            "gem": "   /\\\n  /  \\\n  \\  /\n   \\/",
+            "book": "  ___\n |   |\n |___|\n |___|",
+            "potion": "   ___\n  (   )\n  |___|\n  \\___/",
+            "key": "   ___\n  |   |\n  |___|\n     |",
+            "torch": "   ^^^^\n    |\n    |\n   /|\\",
+            "scroll": "  ___\n ( ~ )\n ( ~ )\n  ---",
+            "ring": "   ___\n  (   )\n  (___)\n",
+            "staff": "   +=+\n    |\n    |\n   /|\\",
+            "default": f"   [{item_name[:8]}]"
+        }
+        
+        # Find matching item pattern
+        for key in simple_items:
+            if key in item_name.lower():
+                return simple_items[key]
+        
+        return simple_items["default"]
