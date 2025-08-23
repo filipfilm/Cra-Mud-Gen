@@ -33,10 +33,11 @@ class NPCPersonality:
 class ConversationSystem:
     """Manages NPC conversations and dialogue"""
     
-    def __init__(self):
+    def __init__(self, world=None):
         self.context = ConversationContext()
         self.npcs = self._initialize_npcs()
         self.conversation_patterns = self._initialize_patterns()
+        self.world = world  # Reference to world for dynamic NPCs
     
     def _initialize_npcs(self) -> Dict[str, NPCPersonality]:
         """Initialize NPC personalities and dialogue"""
@@ -117,15 +118,46 @@ class ConversationSystem:
         # Process ongoing conversation
         return self._process_conversation(npc, player_input)
     
+    def reset_conversation_if_needed(self, max_idle_turns: int = 5) -> bool:
+        """Reset conversation after idle period"""
+        if (self.context.conversation_active and 
+            len(self.context.conversation_history) > 0 and 
+            len(self.context.conversation_history) % max_idle_turns == 0):
+            self._end_conversation()
+            return True
+        return False
+    
     def _find_npc(self, identifier: str) -> Optional[NPCPersonality]:
         """Find NPC by name or occupation"""
         identifier_lower = identifier.lower()
+        
+        # First check static NPCs
         for key, npc in self.npcs.items():
             if (identifier_lower in key.lower() or 
                 identifier_lower in npc.name.lower() or 
                 identifier_lower in npc.occupation.lower()):
                 return npc
+        
+        # Check for dynamic NPCs in world
+        if self.world:
+            dialogue_data = self.world.get_npc_dialogue_data(identifier)
+            if dialogue_data:
+                return self._create_dynamic_npc_personality(identifier, dialogue_data)
+        
         return None
+    
+    def _create_dynamic_npc_personality(self, npc_name: str, dialogue_data: Dict) -> NPCPersonality:
+        """Create NPCPersonality from dynamic dialogue data"""
+        return NPCPersonality(
+            name=npc_name,
+            occupation="Adventurer",  # Default
+            personality_traits=["dynamic"],
+            greeting=dialogue_data.get("greeting", f"Hello there, I'm {npc_name}."),
+            farewell=dialogue_data.get("farewell", "Farewell, traveler."),
+            topics=dialogue_data.get("topics", {}),
+            default_response="I'm not sure about that.",
+            speech_pattern=dialogue_data.get("personality", "normal")
+        )
     
     def _process_conversation(self, npc: NPCPersonality, player_input: str) -> str:
         """Process player input and generate NPC response"""
@@ -272,6 +304,18 @@ class ConversationSystem:
         
         # Check for direct conversation (if already talking)
         if self.context.conversation_active:
+            # But first check if we should end the conversation
+            if any(word in input_lower for word in self.conversation_patterns["farewell"]):
+                self._end_conversation()
+                return {"type": "not_conversation"}
+            
+            # Also check for obvious non-conversation commands
+            non_conversation_commands = ["go", "move", "look", "take", "drop", "examine", "inventory", "map", "stats", "help", "quit"]
+            if any(input_lower.startswith(cmd) for cmd in non_conversation_commands):
+                # Auto-end conversation and process as regular command
+                self._end_conversation()
+                return {"type": "not_conversation"}
+            
             return {
                 "type": "continue_conversation", 
                 "message": user_input

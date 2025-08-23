@@ -12,6 +12,8 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspa
 from core.room import Room
 from core.theme_manager import ThemeManager
 from core.enemy_spawner import EnemySpawner
+from core.dynamic_content_generator import DynamicContentGenerator
+from core.spatial_navigation import SpatialNavigation
 
 class World:
     """
@@ -23,6 +25,8 @@ class World:
         self.theme = "fantasy"
         self.theme_manager = ThemeManager()
         self.enemy_spawner = EnemySpawner()
+        self.content_generator = DynamicContentGenerator(llm)
+        self.spatial_nav = SpatialNavigation(llm)
         self.dungeon_layout = []
         self.context_manager = context_manager
         self.llm = llm  # LLM instance for ASCII art generation
@@ -78,8 +82,23 @@ class World:
         if self.context_manager and from_room:
             room_type = self.context_manager.suggest_room_type(room_id, from_room, direction)
         else:
-            room_types = self.theme_manager.get_theme_room_types(theme)
-            room_type = random.choice(room_types) if room_types else "chamber"
+            # Use spatial navigation to suggest appropriate room types
+            from_room_obj = self.get_room(from_room) if from_room else None
+            if from_room_obj:
+                from_env = self.spatial_nav._classify_environment(from_room, from_room_obj.description, theme)
+                suggestions = self.spatial_nav.suggest_logical_connections(from_env, theme)
+                suggested_env = suggestions.get(direction, "chamber")
+                
+                # Map environment back to room type
+                env_to_type_map = {
+                    "chamber": "chamber", "large_chamber": "chamber", "cavern": "cavern",
+                    "hallway": "hallway", "tunnel": "tunnel", "library": "library",
+                    "stairwell": "stairwell", "forest": "forest", "field": "chamber"
+                }
+                room_type = env_to_type_map.get(suggested_env, "chamber")
+            else:
+                room_types = self.theme_manager.get_theme_room_types(theme)
+                room_type = random.choice(room_types) if room_types else "chamber"
         
         # Get theme information
         adjectives = self.theme_manager.get_theme_adjectives(theme)
@@ -92,9 +111,13 @@ class World:
         # Create spatially-consistent description
         description = self._create_spatial_description(room_type, adjective, noun, theme, from_room, direction)
         
-        # Get appropriate items and NPCs for this room type
-        items = self._get_room_items(room_type, theme)
-        npcs = self._get_room_npcs(room_type, theme)
+        # Generate dynamic content using LLM
+        dynamic_content = self.content_generator.generate_room_contents(description, theme, depth)
+        items = dynamic_content.get("items", [])
+        npcs = [npc["name"] for npc in dynamic_content.get("npcs", [])]
+        
+        # Store NPC dialogue data for conversation system
+        self._store_npc_dialogues(dynamic_content.get("npcs", []), dynamic_content.get("npc_dialogues", {}), theme)
         
         # Add special items at certain depths to encourage deep exploration
         if depth > 0 and depth % 5 == 0:  # Every 5th depth level
@@ -594,3 +617,38 @@ class World:
             return "grove"
         else:
             return "chamber"  # Default fallback
+    
+    def generate_movement_description(self, from_room_id: str, to_room_id: str, direction: str) -> str:
+        """Generate spatially consistent movement description"""
+        from_room = self.get_room(from_room_id)
+        to_room = self.get_room(to_room_id)
+        
+        if not from_room or not to_room:
+            return f"You move {direction}."
+        
+        return self.spatial_nav.generate_movement_description(
+            from_room_id, to_room_id, direction,
+            from_room.description, to_room.description, 
+            self.theme
+        )
+    
+    def _store_npc_dialogues(self, npcs: List[Dict], npc_dialogues: Dict, theme: str):
+        """Store NPC dialogue data for the conversation system"""
+        for npc in npcs:
+            npc_name = npc["name"]
+            npc_role = npc["role"]
+            
+            # Get dialogue data for this NPC
+            if npc_name in npc_dialogues:
+                dialogue_data = npc_dialogues[npc_name]
+            else:
+                # Generate dialogue using content generator
+                dialogue_data = self.content_generator.create_dynamic_npc_conversation(npc_name, npc_role, theme)
+            
+            # Store for conversation system (we'll need to integrate this)
+            setattr(self, f'_npc_dialogue_{npc_name.lower().replace(" ", "_")}', dialogue_data)
+    
+    def get_npc_dialogue_data(self, npc_name: str) -> Optional[Dict]:
+        """Get stored dialogue data for an NPC"""
+        attr_name = f'_npc_dialogue_{npc_name.lower().replace(" ", "_")}'
+        return getattr(self, attr_name, None)

@@ -4,7 +4,7 @@ Main MUD Engine class that orchestrates the game flow
 import sys
 import os
 import random
-from typing import Optional, Dict
+from typing import Optional, Dict, Any
 
 # Add parent directory to path
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
@@ -16,6 +16,8 @@ from ui.combat_ui import CombatUI
 from core.command_processor import CommandProcessor
 from core.combat_system import CombatSystem
 from core.conversation_system import ConversationSystem
+from core.story_engine import StoryEngine
+from core.choice_processor import ChoiceProcessor
 from llm.llm_interface import LLMIntegrationLayer
 from core.map_system import MapSystem
 from core.context_manager import ContextManager
@@ -38,7 +40,9 @@ class GameEngine:
         self.world = World(self.context_manager, self.llm.llm)  # Pass LLM to world for ASCII art
         self.command_processor = CommandProcessor()
         self.combat_system = CombatSystem()
-        self.conversation_system = ConversationSystem()
+        self.conversation_system = ConversationSystem(self.world)  # Pass world reference
+        self.story_engine = StoryEngine(self.llm.llm)
+        self.choice_processor = ChoiceProcessor(self.story_engine, self.llm.llm)
         self.map_system = MapSystem()  # Initialize mapping system
         self.game_over = False
         
@@ -104,6 +108,9 @@ class GameEngine:
                 
                 # Process command
                 if user_input.strip():
+                    # Create context for choice processing
+                    current_context = self._build_current_context()
+                    
                     # First check if it's a conversation
                     conversation_result = self.conversation_system.parse_conversation_input(user_input)
                     
@@ -111,8 +118,15 @@ class GameEngine:
                         self._handle_conversation(conversation_result)
                         self.suppress_room_display = True
                     else:
-                        result = self.command_processor.parse(user_input, self.player, self.world)
-                        self._process_command_result(result)
+                        # Process through choice processor for story significance
+                        choice_analysis = self.choice_processor.analyze_player_input(user_input, current_context)
+                        
+                        if choice_analysis["type"] == "significant_choice":
+                            self._handle_significant_choice(choice_analysis)
+                        else:
+                            # Handle as regular command
+                            result = self.command_processor.parse(user_input, self.player, self.world)
+                            self._process_command_result(result, current_context)
                 
         except KeyboardInterrupt:
             print("\nGame interrupted by user.")
@@ -140,8 +154,13 @@ class GameEngine:
         # Set player to start room
         self.player.location = "start"
         self.player.current_room_id = "start"
+        
+        # Initialize story arc
+        main_story = self.story_engine.initialize_story_arc(theme)
+        print(f"\n🎭 {main_story.title}")
+        print(f"📖 {main_story.description}\n")
     
-    def _process_command_result(self, result):
+    def _process_command_result(self, result, context=None):
         """
         Process the result of a command execution
         """
@@ -179,8 +198,10 @@ class GameEngine:
                 f"moved {result['direction']} from {old_location}"
             )
             
-            # Generate and display enhanced movement message
-            movement_text = self._generate_movement_text(result['direction'])
+            # Generate and display spatially aware movement message
+            movement_text = self.world.generate_movement_description(
+                old_location, result["new_location"], result["direction"]
+            )
             self.ui.display_message(movement_text)
             
             # Check for enemy encounters in new room
@@ -520,17 +541,10 @@ Type 'map' to see your dungeon map!
         # Generate ASCII art for the item
         ascii_art = self.world.generate_item_ascii_art(item_found, self.player.theme)
         
-        # Generate description with LLM
-        if self.llm and hasattr(self.llm.llm, 'generate_item_description'):
-            try:
-                description = self.llm.llm.generate_item_description(item_found, self.player.theme)
-                if description and "silent" not in description.lower():
-                    return f"{ascii_art}\n\n{description}"
-            except:
-                pass
+        # Generate description using dynamic content generator
+        description = self.world.content_generator.get_item_description(item_found, self.player.theme)
         
-        # Fallback description
-        return f"{ascii_art}\n\nYou examine the {item_found}. It looks like a typical {self.player.theme} {item_found}."
+        return f"{ascii_art}\n\n{description}"
     
     def _examine_environmental_feature(self, feature_name: str, room) -> str:
         """
@@ -833,6 +847,132 @@ Type 'map' to see your dungeon map!
                     )
                     self.ui.display_message(response)
                 else:
-                    self.ui.display_message("The conversation seems to have ended.")
+                    # NPC not found - check if it's a dynamic NPC
+                    npc_dialogue = self.world.get_npc_dialogue_data(current_npc)
+                    if npc_dialogue:
+                        dynamic_npc = self.conversation_system._create_dynamic_npc_personality(current_npc, npc_dialogue)
+                        response = self.conversation_system._process_conversation(dynamic_npc, message)
+                        self.ui.display_message(response)
+                    else:
+                        # End the conversation and process the command normally
+                        self.conversation_system._end_conversation()
+                        result = self.command_processor.parse(message, self.player, self.world)
+                        self._process_command_result(result, self._build_current_context())
             else:
-                self.ui.display_message("You're not currently talking to anyone.")
+                # End the conversation and process the command normally
+                self.conversation_system._end_conversation()
+                result = self.command_processor.parse(message, self.player, self.world)
+                self._process_command_result(result, self._build_current_context())
+    
+    def _build_current_context(self) -> Dict[str, Any]:
+        """Build current context for story/choice processing"""
+        current_room = self.world.get_room(self.player.location)
+        
+        context = {
+            "location": self.player.location,
+            "theme": self.player.theme,
+            "npcs": current_room.npcs if current_room else [],
+            "items": current_room.items if current_room else [],
+            "player_health": self.player.current_health,
+            "player_level": self.player.level,
+            "inventory": self.player.inventory,
+            "in_combat": self.in_combat,
+            "world_tension": self.story_engine.world_state["tension_level"],
+            "moral_alignment": self.story_engine.player_history["moral_alignment"],
+            "story_complexity": len(self.story_engine.story_threads)
+        }
+        
+        # Add situational flags
+        if current_room and current_room.npcs:
+            context["combat_possible"] = True
+        
+        if self.in_combat:
+            context["dangerous_situation"] = True
+        
+        return context
+    
+    def _handle_significant_choice(self, choice_analysis: Dict):
+        """Handle a significant story choice"""
+        story_result = choice_analysis["story_result"]
+        
+        # Display narrative response
+        if story_result.get("narrative"):
+            self.ui.display_message(story_result["narrative"])
+        
+        # Handle immediate consequences
+        for consequence in story_result.get("immediate_consequences", []):
+            self._apply_consequence(consequence)
+        
+        # Show world state changes if significant
+        world_changes = story_result.get("world_state_changes", {})
+        if any(change > 10 for change in world_changes.values()):
+            self._display_world_state_change(world_changes)
+        
+        # Check for dynamic encounters triggered by choice
+        if story_result.get("moral_impact", 0) != 0:
+            self._maybe_trigger_dynamic_encounter()
+        
+        self.suppress_room_display = True
+    
+    def _apply_consequence(self, consequence: Dict):
+        """Apply an immediate consequence"""
+        consequence_type = consequence["type"]
+        
+        if consequence_type == "combat_initiated":
+            # Generate enemies for combat
+            current_room = self.world.get_room(self.player.location)
+            if current_room:
+                enemies = self.world.spawn_enemies_in_room(current_room, self.player.level, False)
+                if enemies:
+                    self.current_enemies = enemies
+                    self.in_combat = True
+                    self.combat_ui.display_combat_start(enemies, self.player.name)
+                    
+        elif consequence_type == "reputation_gain":
+            self.ui.display_message(f"✨ {consequence['description']}")
+            
+        elif consequence_type == "reputation_loss":
+            self.ui.display_message(f"💀 {consequence['description']}")
+    
+    def _display_world_state_change(self, changes: Dict):
+        """Display significant world state changes"""
+        messages = []
+        
+        if changes.get("tension_level", 0) > 10:
+            messages.append("⚡ The air grows thick with tension...")
+            
+        if changes.get("chaos_factor", 0) > 10:
+            messages.append("🌪️ Chaos spreads through the realm...")
+            
+        if changes.get("mystery_depth", 0) > 10:
+            messages.append("🔮 The mysteries deepen around you...")
+        
+        for message in messages:
+            self.ui.display_message(message)
+    
+    def _maybe_trigger_dynamic_encounter(self):
+        """Maybe trigger a dynamic encounter based on story state"""
+        if random.random() < 0.3:  # 30% chance
+            current_room = self.world.get_room(self.player.location)
+            if current_room:
+                encounter = self.story_engine.generate_dynamic_encounter(
+                    self.player.location,
+                    self.player.theme
+                )
+                
+                if encounter:
+                    self._present_dynamic_encounter(encounter)
+    
+    def _present_dynamic_encounter(self, encounter: Dict):
+        """Present a dynamic encounter to the player"""
+        print(f"\n🎪 {encounter['description']}")
+        print(f"⚖️ Stakes: {encounter['stakes']}")
+        
+        if encounter.get('npc'):
+            print(f"👤 {encounter['npc']}")
+        
+        print(f"\n💭 What do you choose?")
+        for i, choice in enumerate(encounter['choices'], 1):
+            print(f"  {i}. {choice}")
+        
+        print()  # Add spacing
