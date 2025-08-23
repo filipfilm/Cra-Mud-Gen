@@ -21,6 +21,7 @@ from core.choice_processor import ChoiceProcessor
 from llm.llm_interface import LLMIntegrationLayer
 from core.map_system import MapSystem
 from core.context_manager import ContextManager
+from core.save_system import SaveSystem
 
 class GameEngine:
     """
@@ -44,11 +45,13 @@ class GameEngine:
         self.story_engine = StoryEngine(self.llm.llm)
         self.choice_processor = ChoiceProcessor(self.story_engine, self.llm.llm)
         self.map_system = MapSystem()  # Initialize mapping system
+        self.save_system = SaveSystem()  # Initialize save system
         self.game_over = False
         
         # Combat state
         self.in_combat = False
         self.current_enemies = []
+        self.turn_counter = 0  # For autosave functionality
         
         # Display control
         self.suppress_room_display = False
@@ -263,12 +266,31 @@ Type 'map' to see your dungeon map!
             # Send narrative commands to LLM for immersive responses
             narrative_response = self._generate_narrative_response(result["command"])
             self.ui.display_message(narrative_response)
+        elif result["type"] == "save":
+            self._handle_save_game(result.get("save_name"))
+        elif result["type"] == "load":
+            self._handle_load_game(result.get("save_name"))
+        elif result["type"] == "quicksave":
+            self._handle_quicksave()
+        elif result["type"] == "quickload":
+            self._handle_quickload()
+        elif result["type"] == "list_saves":
+            self._handle_list_saves()
         elif result["type"] == "invalid":
             self.ui.display_error(result["message"])
         
         # Suppress room display for all commands except those that should redisplay
         if result["type"] not in redisplay_commands:
             self.suppress_room_display = True
+        
+        # Auto-save every 10 turns (not for save/load commands)
+        if result["type"] not in ["save", "load", "quicksave", "quickload", "list_saves"]:
+            self.turn_counter += 1
+            if self.turn_counter % 10 == 0:
+                self.save_system.autosave(
+                    self.player, self.world, self.story_engine,
+                    self.combat_system, self.conversation_system
+                )
     
     def _display_game_state(self):
         """
@@ -976,3 +998,162 @@ Type 'map' to see your dungeon map!
             print(f"  {i}. {choice}")
         
         print()  # Add spacing
+    
+    def _handle_save_game(self, save_name: str = None):
+        """Handle saving the game"""
+        success = self.save_system.save_game(
+            self.player, self.world, self.story_engine, 
+            self.combat_system, self.conversation_system, save_name
+        )
+        if success:
+            self.ui.display_message("💾 Game saved successfully!")
+        else:
+            self.ui.display_error("❌ Failed to save game!")
+    
+    def _handle_load_game(self, save_name: str = None):
+        """Handle loading a saved game"""
+        if save_name:
+            # Load specific save
+            save_data = self.save_system.load_game(save_name)
+        else:
+            # Show save list if no name specified
+            saves = self.save_system.list_saves()
+            if not saves:
+                self.ui.display_message("No saved games found.")
+                return
+            
+            self.ui.display_message("📁 Available saves:")
+            for i, save in enumerate(saves[:10], 1):  # Show up to 10 saves
+                timestamp = save['timestamp'][:19] if save['timestamp'] != 'Unknown' else 'Unknown'
+                self.ui.display_message(f"{i}. {save['display_name']} - Level {save['player_level']} - {timestamp}")
+            
+            try:
+                choice = input("\nEnter save number to load (or 'cancel'): ").strip()
+                if choice.lower() == 'cancel':
+                    self.ui.display_message("Load cancelled.")
+                    return
+                
+                save_index = int(choice) - 1
+                if 0 <= save_index < len(saves):
+                    save_data = self.save_system.load_game(saves[save_index]['filename'])
+                else:
+                    self.ui.display_error("Invalid save number!")
+                    return
+            except (ValueError, KeyboardInterrupt):
+                self.ui.display_message("Load cancelled.")
+                return
+        
+        if save_data:
+            self._restore_game_state(save_data)
+            self.ui.display_message("📂 Game loaded successfully!")
+        else:
+            self.ui.display_error("❌ Failed to load game!")
+    
+    def _handle_quicksave(self):
+        """Handle quick save"""
+        success = self.save_system.quick_save(
+            self.player, self.world, self.story_engine,
+            self.combat_system, self.conversation_system
+        )
+        if success:
+            self.ui.display_message("⚡ Quick save completed!")
+        else:
+            self.ui.display_error("❌ Quick save failed!")
+    
+    def _handle_quickload(self):
+        """Handle quick load"""
+        save_data = self.save_system.quick_load()
+        if save_data:
+            self._restore_game_state(save_data)
+            self.ui.display_message("⚡ Quick load completed!")
+        else:
+            self.ui.display_error("❌ No quick save found!")
+    
+    def _handle_list_saves(self):
+        """Handle listing all save files"""
+        saves = self.save_system.list_saves()
+        if not saves:
+            self.ui.display_message("No saved games found.")
+            return
+        
+        self.ui.display_message(f"📁 Found {len(saves)} saved games:")
+        for i, save in enumerate(saves, 1):
+            timestamp = save['timestamp'][:19] if save['timestamp'] != 'Unknown' else 'Unknown'
+            self.ui.display_message(f"{i:2}. {save['display_name']}")
+            self.ui.display_message(f"    Level {save['player_level']} at {save['location']} - {timestamp}")
+    
+    def _restore_game_state(self, save_data: Dict[str, Any]):
+        """Restore game state from save data"""
+        try:
+            # Restore player state
+            player_data = save_data['player']
+            self.player.location = player_data['location']
+            self.player.current_room_id = player_data['current_room_id']
+            self.player.theme = player_data['theme']
+            self.player.inventory = player_data['inventory'].copy()
+            self.player.stats = player_data['stats'].copy()
+            
+            # Restore combat stats if available
+            if 'combat_stats' in player_data:
+                self.player.combat_stats = player_data['combat_stats'].copy()
+            if 'health' in player_data:
+                self.player.current_health = player_data['health']
+            if 'max_health' in player_data:
+                self.player.max_health = player_data['max_health']
+            if 'level' in player_data:
+                self.player.level = player_data['level']
+            
+            # Restore world state
+            world_data = save_data['world']
+            self.world.theme = world_data['theme']
+            
+            # Restore rooms
+            self.world.rooms.clear()
+            for room_id, room_data in world_data['rooms'].items():
+                from core.room import Room
+                room = Room(
+                    room_id=room_data['room_id'],
+                    description=room_data['description'],
+                    items=room_data['items'].copy(),
+                    npcs=room_data['npcs'].copy(),
+                    connections=room_data['connections'].copy()
+                )
+                room.visited = room_data.get('visited', False)
+                room.depth = room_data.get('depth', 0)
+                self.world.rooms[room_id] = room
+            
+            # Restore other world data
+            if 'room_counter' in world_data:
+                self.world.room_counter = world_data['room_counter']
+            if 'generated_depth' in world_data:
+                self.world.generated_depth = world_data['generated_depth']
+            
+            # Restore story engine state if available
+            if 'story' in save_data and save_data['story']:
+                story_data = save_data['story']
+                if 'player_history' in story_data:
+                    self.story_engine.player_history = story_data['player_history'].copy()
+                if 'world_state' in story_data:
+                    self.story_engine.world_state = story_data['world_state'].copy()
+                if 'narrative_memory' in story_data:
+                    self.story_engine.narrative_memory = story_data['narrative_memory'].copy()
+            
+            # Restore conversation state if available
+            if 'conversation' in save_data and save_data['conversation']:
+                conv_data = save_data['conversation']
+                if 'context' in conv_data:
+                    context = conv_data['context']
+                    self.conversation_system.context.current_npc = context.get('current_npc')
+                    self.conversation_system.context.conversation_history = context.get('conversation_history', []).copy()
+                    self.conversation_system.context.npc_memory = context.get('npc_memory', {}).copy()
+                    self.conversation_system.context.last_topic = context.get('last_topic')
+                    self.conversation_system.context.conversation_active = context.get('conversation_active', False)
+            
+            # Update map system with current player location
+            self.map_system.set_player_location(self.player.location)
+            
+            print(f"Restored to Level {self.player.stats.get('level', 1)} at {self.player.location}")
+            
+        except Exception as e:
+            self.ui.display_error(f"Error restoring game state: {e}")
+            print(f"Restore error: {e}")  # Debug info

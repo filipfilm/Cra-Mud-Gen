@@ -155,7 +155,7 @@ class ConversationSystem:
             greeting=dialogue_data.get("greeting", f"Hello there, I'm {npc_name}."),
             farewell=dialogue_data.get("farewell", "Farewell, traveler."),
             topics=dialogue_data.get("topics", {}),
-            default_response="I'm not sure about that.",
+            default_response=dialogue_data.get("default_response", "*nods thoughtfully* That's an interesting thought, traveler."),
             speech_pattern=dialogue_data.get("personality", "normal")
         )
     
@@ -195,10 +195,42 @@ class ConversationSystem:
     
     def _find_topic_match(self, npc: NPCPersonality, player_input: str) -> Optional[str]:
         """Find the best matching topic for player input"""
-        # Direct topic matches
+        # Enhanced topic matching with synonyms
+        topic_synonyms = {
+            "help": ["help", "assist", "aid", "guidance", "what do you do", "what can you", "can you help"],
+            "information": ["information", "info", "know", "tell me", "what about", "news", "rumors", "gossip"],
+            "directions": ["directions", "way", "path", "route", "where", "how do i get", "which way"],
+            "adventure": ["adventure", "quest", "mission", "task", "journey", "explore"],
+            "trade": ["trade", "buy", "sell", "shop", "goods", "wares"],
+            "quest": ["quest", "task", "mission", "job", "work", "adventure"]
+        }
+        
+        # Direct topic matches first
         for topic, _ in npc.topics.items():
             if topic in player_input:
                 return topic
+        
+        # Synonym matching
+        for topic, response in npc.topics.items():
+            if topic in topic_synonyms:
+                for synonym in topic_synonyms[topic]:
+                    if synonym in player_input:
+                        return topic
+        
+        # Contextual matching based on player input patterns
+        if any(word in player_input for word in ["i am", "i'm", "yes", "indeed", "correct", "that's right"]):
+            # Player is agreeing or stating something - respond contextually
+            if "adventure" in npc.topics:
+                return "adventure"
+            elif "help" in npc.topics:
+                return "help"
+        
+        if any(word in player_input for word in ["to what", "what", "continue", "go on"]):
+            # Player wants more information
+            if "quest" in npc.topics:
+                return "quest"
+            elif "information" in npc.topics:
+                return "information"
         
         # Pattern-based matching
         topic_patterns = {
@@ -246,10 +278,24 @@ class ConversationSystem:
                 return "*scratches head* Can't say I know the answer to that one, friend."
             elif npc.speech_pattern == "mystical":
                 return "*peers into crystal ball* The mists are too thick... the answer eludes me."
+            else:
+                return "That's a good question... I'm afraid I don't have an answer for that."
+        
+        # Check if player is making statements or agreeing
+        if any(word in player_input for word in ["i am", "i'm", "yes", "indeed", "that's right"]):
+            return "*nods approvingly* I can see that about you, traveler."
+        
+        # Check if player wants continuation or more info  
+        if any(word in player_input for word in ["to what", "continue", "go on", "and then"]):
+            return "*pauses thoughtfully* Perhaps we should speak of other matters..."
         
         # Check if player seems confused
         if any(word in player_input for word in ["confused", "don't understand", "what do you mean"]):
             return "Let me explain better... " + npc.default_response
+        
+        # Check for adventure/direction related queries
+        if any(word in player_input for word in ["way", "direction", "adventure", "path"]):
+            return "*gestures around* There are many paths in this world, choose wisely."
         
         return npc.default_response
     

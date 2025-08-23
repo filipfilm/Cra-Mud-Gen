@@ -26,7 +26,12 @@ class CommandProcessor:
             "flee": r"^(flee|run|escape)\s*$",
             "heal": r"^(heal|use potion|drink potion)\s*$",
             "map": r"^(map|show map|read map|view map|m)\s*$",
-            "stats": r"^(stats|status|exploration)\s*$"
+            "stats": r"^(stats|status|exploration)\s*$",
+            "save": r"^(save|save game)\s*(.*)\s*$",
+            "load": r"^(load|load game)\s*(.*)\s*$",
+            "quicksave": r"^(quicksave|qsave)\s*$",
+            "quickload": r"^(quickload|qload)\s*$",
+            "list_saves": r"^(saves|list saves|show saves)\s*$"
         }
         
     def parse(self, user_input: str, player, world) -> Dict[str, Any]:
@@ -90,6 +95,25 @@ class CommandProcessor:
             
         elif re.match(self.commands["stats"], user_input):
             return {"type": "stats", "message": "Showing exploration stats"}
+            
+        elif re.match(self.commands["save"], user_input):
+            match = re.match(self.commands["save"], user_input)
+            save_name = match.group(2).strip() if match.group(2) else None
+            return {"type": "save", "save_name": save_name}
+            
+        elif re.match(self.commands["load"], user_input):
+            match = re.match(self.commands["load"], user_input)
+            save_name = match.group(2).strip() if match.group(2) else None
+            return {"type": "load", "save_name": save_name}
+            
+        elif re.match(self.commands["quicksave"], user_input):
+            return {"type": "quicksave"}
+            
+        elif re.match(self.commands["quickload"], user_input):
+            return {"type": "quickload"}
+            
+        elif re.match(self.commands["list_saves"], user_input):
+            return {"type": "list_saves"}
             
         else:
             # Send unknown commands to LLM for narrative responses
@@ -173,6 +197,13 @@ Conversation commands:
   talk to <npc>    - Start a conversation with an NPC
   hello <npc>      - Greet an NPC
   goodbye          - End current conversation
+
+Save/Load commands:
+  save [name]      - Save your game (optionally with custom name)
+  load [name]      - Load a saved game
+  quicksave/qsave  - Quick save to default slot
+  quickload/qload  - Quick load from default slot
+  saves            - List all saved games
   
   help/h           - Show this help text
   quit/q           - Exit the game
