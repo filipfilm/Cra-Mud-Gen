@@ -90,7 +90,7 @@ class TerminalUI:
                 print(f"\n{Colors.BRIGHT_RED}Game interrupted. Exiting...{Colors.RESET}")
                 sys.exit(0)
                 
-    def display_room(self, room, player):
+    def display_room(self, room, player, llm=None):
         """
         Display the current room description with colors and effects
         """
@@ -106,7 +106,7 @@ class TerminalUI:
         print(f"{Colors.BRIGHT_WHITE}{description}{Colors.RESET}")
         
         # Apply contextual visual effects based on room description
-        ContextualEffects.apply_room_effect(description, player.theme, 1.5)
+        ContextualEffects.apply_room_effect(description, player.theme, 1.5, llm)
         
         # Show items with rarity colors
         items = room.get_items()
@@ -309,32 +309,32 @@ class TerminalUI:
                 print(f"\n\n{Colors.GLOW_CYAN}Goodbye!{Colors.RESET}")
                 sys.exit(0)
     
-    def display_examine_result(self, result: str, item_name: str, theme: str):
+    def display_examine_result(self, result: str, item_name: str, theme: str, llm=None):
         """
         Display examination result with contextual effects
         """
         print(result)
         # Apply item-specific visual effects
-        ContextualEffects.apply_item_effect(item_name, theme, "examine")
+        ContextualEffects.apply_item_effect(item_name, theme, "examine", llm)
     
-    def display_combat_event(self, event_type: str, theme: str, message: str = ""):
+    def display_combat_event(self, event_type: str, theme: str, message: str = "", llm=None):
         """
         Display combat events with spectacular effects
         """
         if message:
             print(message)
-        ContextualEffects.apply_combat_effect(event_type, theme)
+        ContextualEffects.apply_combat_effect(event_type, theme, llm)
     
-    def display_death(self, cause: str, theme: str):
+    def display_death(self, cause: str, theme: str, llm=None):
         """
         Display dramatic death sequence
         """
         print(f"\n{Colors.PULSE_RED}💀 GAME OVER 💀{Colors.RESET}")
         print(f"{Colors.DIM}Cause of death: {cause}{Colors.RESET}")
-        ContextualEffects.apply_death_effect(cause, theme)
+        ContextualEffects.apply_death_effect(cause, theme, llm)
     
-    def maybe_ambient_effect(self, theme: str):
+    def maybe_ambient_effect(self, theme: str, llm=None):
         """
         Randomly apply atmospheric ambient effects
         """
-        ContextualEffects.random_ambient_effect(theme, 0.05)  # 5% chance
+        ContextualEffects.random_ambient_effect(theme, 0.05, llm)  # 5% chance

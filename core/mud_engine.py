@@ -95,10 +95,10 @@ class GameEngine:
                         self._enhance_room_description(current_room)
                         # Update map with room exits
                         self.map_system.discover_room_exits(self.player.location, current_room.connections)
-                        self.ui.display_room(current_room, self.player)
+                        self.ui.display_room(current_room, self.player, self.llm)
                     
                     # Occasionally show ambient atmospheric effects
-                    self.ui.maybe_ambient_effect(self.player.theme)
+                    self.ui.maybe_ambient_effect(self.player.theme, self.llm)
                 else:
                     # Reset the suppression flag
                     self.suppress_room_display = False

@@ -11,7 +11,7 @@ class ContextualEffects:
     """
     
     @staticmethod
-    def apply_room_effect(room_description: str, theme: str, duration: float = 1.5):
+    def apply_room_effect(room_description: str, theme: str, duration: float = 1.5, llm=None):
         """
         Apply visual effects based on room description keywords
         """
@@ -19,50 +19,60 @@ class ContextualEffects:
         
         # Water/pond/lake effects
         if any(word in description_lower for word in ['pond', 'lake', 'water', 'pool', 'spring', 'fountain']):
-            Effects.shimmer_pond("~ The water shimmers mysteriously ~", duration)
+            message = ContextualEffects._generate_effect_message(llm, 'water', theme, room_description)
+            Effects.shimmer_pond(message, duration)
             return True
         
         # Fire/flame/burning effects  
         if any(word in description_lower for word in ['fire', 'flame', 'burning', 'torch', 'brazier', 'lava', 'molten']):
             if 'lava' in description_lower or 'molten' in description_lower:
-                Effects.lava_flow("≈ Molten rock flows nearby ≈", duration)
+                message = ContextualEffects._generate_effect_message(llm, 'lava', theme, room_description)
+                Effects.lava_flow(message, duration)
             else:
-                Effects.burning_flame("≈ Flames dance in the darkness ≈", duration)
+                message = ContextualEffects._generate_effect_message(llm, 'fire', theme, room_description)
+                Effects.burning_flame(message, duration)
             return True
         
         # Crystal/gem/magical effects
         if any(word in description_lower for word in ['crystal', 'gem', 'jewel', 'sparkle', 'glitter', 'magical', 'enchanted']):
-            Effects.crystal_sparkle("✧ Magical energies swirl around ✧", duration)
+            message = ContextualEffects._generate_effect_message(llm, 'magical', theme, room_description)
+            Effects.crystal_sparkle(message, duration)
             return True
         
         # Lightning/storm/electric effects
         if any(word in description_lower for word in ['lightning', 'storm', 'electric', 'spark', 'energy', 'power']):
-            Effects.lightning_strike("⚡ Energy crackles through the air ⚡", 2)
+            message = ContextualEffects._generate_effect_message(llm, 'lightning', theme, room_description)
+            Effects.lightning_strike(message, 2)
             return True
         
         # Poison/toxic/corruption effects
         if any(word in description_lower for word in ['poison', 'toxic', 'corruption', 'decay', 'rot', 'putrid', 'bubble']):
-            Effects.toxic_bubble("≈ Noxious vapors rise ≈", duration)
+            message = ContextualEffects._generate_effect_message(llm, 'poison', theme, room_description)
+            Effects.toxic_bubble(message, duration)
             return True
         
         # Void/shadow/dark effects
         if any(word in description_lower for word in ['void', 'shadow', 'dark', 'corruption', 'evil', 'curse', 'nightmare']):
-            Effects.void_corruption("▓ Darkness seeps from the walls ▓", duration)
+            message = ContextualEffects._generate_effect_message(llm, 'shadow', theme, room_description)
+            Effects.void_corruption(message, duration)
             return True
         
         # Snow/ice/cold effects
         if any(word in description_lower for word in ['snow', 'ice', 'frost', 'frozen', 'cold', 'winter', 'blizzard']):
-            Effects.snow_fall("❅ Frost gathers in the air ❅", duration)
+            message = ContextualEffects._generate_effect_message(llm, 'ice', theme, room_description)
+            Effects.snow_fall(message, duration)
             return True
         
         # Smoke/mist/fog effects
         if any(word in description_lower for word in ['smoke', 'mist', 'fog', 'haze', 'vapor', 'steam']):
-            Effects.smoke_drift("≋ Mist swirls about ≋", duration)
+            message = ContextualEffects._generate_effect_message(llm, 'smoke', theme, room_description)
+            Effects.smoke_drift(message, duration)
             return True
         
         # Aurora/celestial effects
         if any(word in description_lower for word in ['aurora', 'celestial', 'starlight', 'cosmic', 'stellar', 'nebula']):
-            Effects.aurora_dance("✦ Celestial lights dance ✦", duration)
+            message = ContextualEffects._generate_effect_message(llm, 'aurora', theme, room_description)
+            Effects.aurora_dance(message, duration)
             return True
         
         # Matrix/digital/tech effects (Sci-fi theme)
@@ -73,7 +83,74 @@ class ContextualEffects:
         return False
     
     @staticmethod
-    def apply_item_effect(item_name: str, theme: str, action: str = "examine"):
+    def _generate_effect_message(llm, effect_type: str, theme: str, context: str) -> str:
+        """
+        Generate dynamic effect message using LLM
+        """
+        if not llm:
+            # Fallback to simple dynamic messages if no LLM
+            fallbacks = {
+                'water': ["~ Water ripples softly ~", "~ Liquid reflects light ~", "~ Moisture glints nearby ~"],
+                'fire': ["≈ Heat shimmers in the air ≈", "≈ Warm light flickers ≈", "≈ Embers glow softly ≈"],
+                'lava': ["≈ Molten currents flow ≈", "≈ Volcanic heat radiates ≈", "≈ Liquid rock bubbles ≈"],
+                'magical': ["✧ Energy pulses gently ✧", "✧ Mystical forces stir ✧", "✧ Power hums quietly ✧"],
+                'lightning': ["⚡ Static fills the air ⚡", "⚡ Electrical energy crackles ⚡", "⚡ Power surges nearby ⚡"],
+                'poison': ["≈ Toxic vapors drift ≈", "≈ Noxious fumes rise ≈", "≈ Corruption seeps ≈"],
+                'shadow': ["▓ Darkness shifts ▓", "▓ Shadows dance ▓", "▓ Gloom deepens ▓"],
+                'ice': ["❅ Cold air swirls ❅", "❅ Frost forms ❅", "❅ Chill winds blow ❅"],
+                'smoke': ["≋ Vapor drifts past ≋", "≋ Wisps curl upward ≋", "≋ Haze obscures ≋"],
+                'aurora': ["✦ Light patterns shift ✦", "✦ Colors dance above ✦", "✦ Radiance flows ✦"]
+            }
+            return random.choice(fallbacks.get(effect_type, ["~ Something stirs ~"]))
+        
+        prompt = f\"\"\"Create a short atmospheric effect message for a {theme} setting.
+
+Effect type: {effect_type}
+Context: {context}
+
+Generate a brief atmospheric message (3-6 words) that describes this environmental effect.
+Format it with appropriate symbols like:
+- Water: ~ message ~
+- Fire/lava: ≈ message ≈ 
+- Magic: ✧ message ✧
+- Lightning: ⚡ message ⚡
+- Poison: ≈ message ≈
+- Shadow: ▓ message ▓
+- Ice: ❅ message ❅
+- Smoke: ≋ message ≋
+- Aurora: ✦ message ✦
+
+Keep it evocative and thematic. Only return the formatted message.\"\"\"
+        
+        try:
+            response = llm.generate_response(prompt)
+            # Clean response and ensure it has symbols
+            cleaned = response.strip()
+            if not any(symbol in cleaned for symbol in ['~', '≈', '✧', '⚡', '▓', '❅', '≋', '✦']):
+                # Add fallback symbols if LLM didn't include them
+                symbols = {'water': '~', 'fire': '≈', 'lava': '≈', 'magical': '✧', 'lightning': '⚡', 
+                          'poison': '≈', 'shadow': '▓', 'ice': '❅', 'smoke': '≋', 'aurora': '✦'}
+                symbol = symbols.get(effect_type, '~')
+                cleaned = f\"{symbol} {cleaned} {symbol}\"
+            return cleaned
+        except:
+            # Fallback if LLM fails
+            fallbacks = {
+                'water': \"~ Water ripples softly ~\",
+                'fire': \"≈ Flames dance nearby ≈\", 
+                'lava': \"≈ Molten rock flows ≈\",
+                'magical': \"✧ Mystical energy swirls ✧\",
+                'lightning': \"⚡ Energy crackles ⚡\",
+                'poison': \"≈ Toxic vapors rise ≈\",
+                'shadow': \"▓ Darkness shifts ▓\",
+                'ice': \"❅ Frost gathers ❅\",
+                'smoke': \"≋ Mist swirls ≋\",
+                'aurora': \"✦ Light dances ✦\"
+            }
+            return fallbacks.get(effect_type, \"~ Something stirs ~\")
+    
+    @staticmethod
+    def apply_item_effect(item_name: str, theme: str, action: str = "examine", llm=None):
         """
         Apply effects based on item examination or interaction
         """
@@ -82,39 +159,82 @@ class ContextualEffects:
         # Legendary/artifact items get special effects
         if any(word in item_lower for word in ['legendary', 'artifact', 'divine', 'cosmic', 'eternal']):
             if theme == "fantasy":
-                Effects.crystal_sparkle(f"✧ The {item_name} radiates ancient power ✧", 2.5)
+                message = ContextualEffects._generate_item_effect_message(llm, 'legendary', item_name, theme)
+                Effects.crystal_sparkle(message, 2.5)
             elif theme == "sci-fi":
-                Effects.electric_storm(f"⚡ The {item_name} pulses with energy ⚡", 2.0)
+                message = ContextualEffects._generate_item_effect_message(llm, 'legendary', item_name, theme)
+                Effects.electric_storm(message, 2.0)
             elif theme == "horror":
-                Effects.void_corruption(f"▓ The {item_name} whispers dark secrets ▓", 2.0)
+                message = ContextualEffects._generate_item_effect_message(llm, 'legendary', item_name, theme)
+                Effects.void_corruption(message, 2.0)
             elif theme == "cyberpunk":
-                Effects.matrix_rain(f"⟩ The {item_name} interfaces with reality ⟨", 2.0)
+                message = ContextualEffects._generate_item_effect_message(llm, 'legendary', item_name, theme)
+                Effects.matrix_rain(message, 2.0)
             return True
         
         # Fire-based items
         if any(word in item_lower for word in ['flame', 'fire', 'burning', 'torch', 'ember']):
-            Effects.burning_flame(f"≈ The {item_name} flickers with inner fire ≈", 2.0)
+            message = ContextualEffects._generate_item_effect_message(llm, 'fire', item_name, theme)
+            Effects.burning_flame(message, 2.0)
             return True
         
         # Crystal/magical items
         if any(word in item_lower for word in ['crystal', 'gem', 'magical', 'enchanted', 'glowing']):
-            Effects.crystal_sparkle(f"✧ The {item_name} sparkles brilliantly ✧", 2.0)
+            message = ContextualEffects._generate_item_effect_message(llm, 'magical', item_name, theme)
+            Effects.crystal_sparkle(message, 2.0)
             return True
         
         # Tech/electric items
         if any(word in item_lower for word in ['electric', 'plasma', 'energy', 'quantum', 'neural']):
-            Effects.electric_storm(f"⚡ The {item_name} hums with power ⚡", 1.5)
+            message = ContextualEffects._generate_item_effect_message(llm, 'electric', item_name, theme)
+            Effects.electric_storm(message, 1.5)
             return True
         
         # Cursed/dark items
         if any(word in item_lower for word in ['cursed', 'dark', 'shadow', 'void', 'nightmare']):
-            Effects.void_corruption(f"▓ The {item_name} emanates malevolent energy ▓", 2.0)
+            message = ContextualEffects._generate_item_effect_message(llm, 'cursed', item_name, theme)
+            Effects.void_corruption(message, 2.0)
             return True
         
         return False
     
     @staticmethod
-    def apply_combat_effect(event_type: str, theme: str):
+    def _generate_item_effect_message(llm, effect_type: str, item_name: str, theme: str) -> str:
+        """Generate dynamic item effect message using LLM"""
+        if not llm:
+            templates = {
+                'legendary': f"✧ The {item_name} radiates power ✧",
+                'fire': f"≈ The {item_name} flickers with flame ≈",
+                'magical': f"✧ The {item_name} sparkles ✧",
+                'electric': f"⚡ The {item_name} hums with energy ⚡",
+                'cursed': f"▓ The {item_name} emanates darkness ▓"
+            }
+            return templates.get(effect_type, f"~ The {item_name} seems special ~")
+        
+        try:
+            prompt = f\"\"\"Create a short atmospheric effect message for examining a {effect_type} item in a {theme} setting.
+
+Item: {item_name}
+Effect type: {effect_type}
+
+Generate a brief effect message (4-8 words) describing this item's properties.
+Format with symbols: ✧ for legendary/magical, ≈ for fire, ⚡ for electric, ▓ for cursed.
+Mention the item name. Only return the formatted message.\"\"\"
+            
+            response = llm.generate_response(prompt)
+            return response.strip()
+        except:
+            templates = {
+                'legendary': f"✧ The {item_name} radiates ancient power ✧",
+                'fire': f"≈ The {item_name} flickers with inner flame ≈",
+                'magical': f"✧ The {item_name} sparkles with magic ✧",
+                'electric': f"⚡ The {item_name} crackles with energy ⚡",
+                'cursed': f"▓ The {item_name} whispers darkness ▓"
+            }
+            return templates.get(effect_type, f"~ The {item_name} seems special ~")
+    
+    @staticmethod
+    def apply_combat_effect(event_type: str, theme: str, llm=None):
         """
         Apply effects during combat events
         """
@@ -140,7 +260,7 @@ class ContextualEffects:
                 Effects.aurora_dance("✦ Power flows through you ✦", 2.0)
     
     @staticmethod
-    def apply_death_effect(cause: str, theme: str):
+    def apply_death_effect(cause: str, theme: str, llm=None):
         """
         Apply dramatic death effects
         """
@@ -159,7 +279,7 @@ class ContextualEffects:
             Effects.aurora_dance("✦ Your adventure ends here ✦", 3.0)
     
     @staticmethod
-    def random_ambient_effect(theme: str, intensity: float = 0.1):
+    def random_ambient_effect(theme: str, intensity: float = 0.1, llm=None):
         """
         Randomly apply ambient atmospheric effects
         """
