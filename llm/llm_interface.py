@@ -1,5 +1,5 @@
 """
-LLM Interface for the MUD game - connects to local language models
+LLM Interface for Dun-Gen - connects to local language models
 """
 import json
 from typing import Dict, Any, Optional
@@ -195,7 +195,7 @@ class LLMIntegrationLayer:
         
         # Create a structured prompt
         prompt = f"""
-        You are an AI assistant in a {theme}-themed MUD game. 
+        You are an AI assistant in a {theme}-themed adventure game. 
         The player is currently at location '{player_location}' in a {room_description}.
         The player has {player_health} health.
         

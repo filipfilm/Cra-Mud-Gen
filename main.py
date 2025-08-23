@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Main entry point for the Procedural MUD game
+Main entry point for Dun-Gen
 """
 import sys
 import os
@@ -10,13 +10,13 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 def main():
     """
-    Main function to start the MUD game
+    Main function to start Dun-Gen
     """
     try:
         # Import here to handle potential import errors gracefully
         from core.mud_engine import GameEngine
         
-        print("Starting Procedural MUD game...")
+        print("Starting Dun-Gen...")
         
         # Create and run the game engine
         engine = GameEngine()
@@ -29,8 +29,8 @@ def main():
         print(f"Current directory: {os.getcwd()}")
         print(f"Python path: {sys.path}")
         print(f"Directory contents: {os.listdir('.')}")
-        if os.path.exists('mud_game'):
-            print(f"mud_game contents: {os.listdir('mud_game')}")
+        if os.path.exists('dun_gen'):
+            print(f"dun_gen contents: {os.listdir('dun_gen')}")
         sys.exit(1)
     except Exception as e:
         print(f"An error occurred while running the game: {e}")

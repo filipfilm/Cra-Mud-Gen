@@ -1,5 +1,5 @@
 """
-Ollama LLM integration for the MUD game - using Mistral-Small
+Ollama LLM integration for Dun-Gen - using Mistral-Small
 """
 import requests
 import json
@@ -76,7 +76,7 @@ class OllamaLLM:
                         "tinyllama": "Very fast, basic responses",
                         "neural-chat": "Optimized for conversation",
                         "openhermes": "Fine-tuned for helpful responses",
-                        "wizardcoder": "Code-focused, may be technical for MUD",
+                        "wizardcoder": "Code-focused, may be technical for adventure games",
                         "deepseek": "Good reasoning capabilities",
                         "starling": "Balanced performance model"
                     }
@@ -110,7 +110,7 @@ class OllamaLLM:
             theme = context.get("theme", "fantasy") if context else "fantasy"
             
             # Mistral responds well to clear, structured prompts
-            system_message = f"""You are an immersive narrator for a {theme}-themed MUD (text adventure) game.
+            system_message = f"""You are an immersive narrator for a {theme}-themed text adventure game.
             
             Style Guidelines:
             - Write in second person ("You see...", "You feel...")
@@ -217,7 +217,7 @@ class OllamaLLM:
                 "border": "Create a decorative border or frame (single line pattern)"
             }
             
-            system_prompt = f"""You are an ASCII art generator for a {theme}-themed MUD game.
+            system_prompt = f"""You are an ASCII art generator for a {theme}-themed adventure game.
 
 Style: {style_guide.get(theme, style_guide['fantasy'])}
 Task: {art_instructions.get(art_type, art_instructions['banner'])}

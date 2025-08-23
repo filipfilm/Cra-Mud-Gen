@@ -1,5 +1,5 @@
 """
-Image generation bridge for the MUD game - connects to ComfyUI
+Image generation bridge for Dun-Gen - connects to ComfyUI
 """
 import requests
 import json

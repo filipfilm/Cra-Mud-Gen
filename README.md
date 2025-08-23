@@ -1,6 +1,6 @@
-# Procedural MUD Game
+# Dun-Gen
 
-A text-based adventure game that runs entirely offline, featuring:
+A dynamic dungeon generator and text-based adventure game that creates unique stories every time, featuring:
 - Procedurally generated dungeons and themes
 - Local LLM integration for natural language responses
 - Text-to-image generation capabilities
@@ -35,7 +35,7 @@ A text-based adventure game that runs entirely offline, featuring:
 ## Project Structure
 
 ```
-mud_game/
+dun-gen/
 ├── main.py                 # Main entry point
 ├── requirements.txt        # Project dependencies
 ├── README.md               # This file

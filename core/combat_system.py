@@ -1,5 +1,5 @@
 """
-Combat System for Procedural MUD
+Combat System for Dun-Gen
 Handles tactical turn-based combat, health, experience, and progression
 """
 import random

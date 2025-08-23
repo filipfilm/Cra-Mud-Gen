@@ -1,5 +1,5 @@
 """
-Main MUD Engine class that orchestrates the game flow
+Main Dun-Gen Engine class that orchestrates the game flow
 """
 import sys
 import os

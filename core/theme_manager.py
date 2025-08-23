@@ -1,5 +1,5 @@
 """
-Theme management system for the MUD game
+Theme management system for Dun-Gen
 """
 from typing import Dict, List
 

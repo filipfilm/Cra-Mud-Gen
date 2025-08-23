@@ -1,5 +1,5 @@
 """
-ASCII Map System for the MUD game
+ASCII Map System for Dun-Gen
 Tracks player movement and generates text-based maps
 """
 from typing import Dict, List, Tuple, Set
@@ -17,7 +17,7 @@ class Room:
 
 class MapSystem:
     """
-    Handles ASCII map generation and room tracking for the MUD
+    Handles ASCII map generation and room tracking for Dun-Gen
     """
     
     def __init__(self):

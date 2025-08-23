@@ -1,6 +1,6 @@
 """
 ANSI Color and Effect System for Terminal UI
-Provides colors, effects, and animations for the MUD game
+Provides colors, effects, and animations for Dun-Gen
 """
 import time
 import sys

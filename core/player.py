@@ -6,11 +6,11 @@ from .combat_system import Combatant, HealthSystem, ExperienceSystem
 
 class Player(Combatant):
     """
-    Represents the player in the MUD game - now with combat capabilities
+    Represents the player in Dun-Gen - now with combat capabilities
     """
     
     def __init__(self):
-        # Initialize MUD-specific attributes first
+        # Initialize game-specific attributes first
         self.stats: Dict[str, Any] = {
             "level": 1,
             "experience": 0,
@@ -20,7 +20,7 @@ class Player(Combatant):
         # Initialize combat stats 
         super().__init__("Player", 100, 1)
         
-        # More MUD-specific attributes
+        # More game-specific attributes
         self.location = "start_room"
         self.current_room_id = "start_room"
         self.inventory: List[str] = []

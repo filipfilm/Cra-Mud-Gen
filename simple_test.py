@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Simple test to verify the MUD game core components work
+Simple test to verify Dun-Gen core components work
 """
 import sys
 import os
@@ -59,7 +59,7 @@ def test_core_components():
 
 def main():
     """Run the simple test"""
-    print("Running MUD game core component tests...")
+    print("Running Dun-Gen core component tests...")
     print("=" * 50)
     
     if test_core_components():

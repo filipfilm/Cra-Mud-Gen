@@ -1,11 +1,11 @@
 #!/usr/bin/env python3
 """
-Simple test to verify the MUD game components work together
+Simple test to verify Dun-Gen components work together
 """
 import sys
 import os
 
-# Add mud_game to path
+# Add dun_gen to path
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 def test_imports():
@@ -98,7 +98,7 @@ def test_command_processing():
 
 def main():
     """Run all tests"""
-    print("Running MUD game component tests...")
+    print("Running Dun-Gen component tests...")
     print("=" * 50)
     
     tests = [

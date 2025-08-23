@@ -1,5 +1,5 @@
 """
-Terminal-based user interface for the MUD game
+Terminal-based user interface for Dun-Gen
 """
 import os
 import sys
@@ -9,7 +9,7 @@ from .contextual_effects import ContextualEffects
 
 class TerminalUI:
     """
-    Text-based user interface for the MUD game
+    Text-based user interface for Dun-Gen
     """
     
     def __init__(self):
@@ -34,7 +34,7 @@ class TerminalUI:
         self.clear_screen()
         
         # Animated title with rainbow effect
-        title = "Welcome to Procedural MUD"
+        title = "Welcome to Dun-Gen"
         rainbow_title = Effects.rainbow_text(title)
         
         print(f"{Colors.BRIGHT_CYAN}{'=' * 60}{Colors.RESET}")
@@ -197,7 +197,7 @@ class TerminalUI:
         """
         Display goodbye message with colorful farewell
         """
-        farewell_text = "Thank you for playing Procedural MUD!"
+        farewell_text = "Thank you for playing Dun-Gen!"
         rainbow_farewell = Effects.rainbow_text(farewell_text)
         
         print(f"\n{rainbow_farewell}")
@@ -255,7 +255,7 @@ class TerminalUI:
         brain_title = Effects.neon_glow("🧠 SELECT AI MODEL", 0, 255, 255)
         print(f"           {brain_title}")
         print(f"{Colors.BRIGHT_CYAN}{'=' * 60}{Colors.RESET}")
-        print(f"{Colors.GLOW_YELLOW}Available Ollama models for your MUD adventure:{Colors.RESET}\n")
+        print(f"{Colors.GLOW_YELLOW}Available Ollama models for your adventure:{Colors.RESET}\n")
         
         # Show recommended models first
         recommended = [m for m in available_models if m.get("recommended", False)]
@@ -292,7 +292,7 @@ class TerminalUI:
                     
                     print(f"\n{Colors.GLOW_GREEN}✓ Selected: {Colors.BRIGHT_WHITE}{model_name}{Colors.RESET}")
                     if selected_model.get("recommended", False):
-                        print(f"  {Colors.BRIGHT_MAGENTA}Great choice for MUD adventures! 🎮{Colors.RESET}")
+                        print(f"  {Colors.BRIGHT_MAGENTA}Great choice for adventures! 🎮{Colors.RESET}")
                     else:
                         print(f"  {Colors.BRIGHT_YELLOW}This model may work differently - experiment and have fun! 🔬{Colors.RESET}")
                     

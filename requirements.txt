@@ -1,4 +1,4 @@
-# Requirements for Procedural MUD Game
+# Requirements for Dun-Gen
 # This file lists the dependencies needed to run the game
 
 # Core Python libraries (usually included with Python 3.8+)

@@ -1,5 +1,5 @@
 """
-Context Management System for the MUD game
+Context Management System for Dun-Gen
 Maintains spatial consistency and manages LLM context with FIFO
 """
 from typing import Dict, List, Any, Optional
