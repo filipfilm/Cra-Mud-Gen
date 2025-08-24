@@ -76,7 +76,7 @@ class NarrativeState:
     completed_beats: List[str] = None
     active_npcs: List[str] = None
     story_flags: Dict[str, bool] = None
-    player_choices: List[Dict] = None
+    player_choices: Dict[str, List] = None
     narrative_tension: float = 0.5  # 0.0 to 1.0
     
     def __post_init__(self):
@@ -87,7 +87,7 @@ class NarrativeState:
         if self.story_flags is None:
             self.story_flags = {}
         if self.player_choices is None:
-            self.player_choices = []
+            self.player_choices = {}
     
     def advance_beat(self):
         """Move to the next story beat"""

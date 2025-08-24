@@ -1,94 +1,425 @@
 """
-Seed UI System for Cra-mud-gen
-Terminal-based interface for story seed generation with sliders and text input
+Terminal-based UI for Story Seed Generation in Cra-mud-gen
+Provides interactive interface for creating story seeds using sliders, text, or random generation
 """
 import os
 import sys
-from typing import Dict, Optional, Tuple
-from ..core.story_seed_generator import StorySeed, StorySeedGenerator
-from .colors import Colors, Effects
+from typing import Optional, Dict, Any
+from core.story_seed_generator import StorySeed, StorySeedGenerator
+
+
+class Colors:
+    """ANSI color codes for terminal output"""
+    RESET = '\033[0m'
+    
+    # Standard colors
+    RED = '\033[31m'
+    GREEN = '\033[32m'
+    YELLOW = '\033[33m'
+    BLUE = '\033[34m'
+    MAGENTA = '\033[35m'
+    CYAN = '\033[36m'
+    WHITE = '\033[37m'
+    GRAY = '\033[90m'
+    
+    # Bright colors
+    BRIGHT_RED = '\033[91m'
+    BRIGHT_GREEN = '\033[92m'
+    BRIGHT_YELLOW = '\033[93m'
+    BRIGHT_BLUE = '\033[94m'
+    BRIGHT_MAGENTA = '\033[95m'
+    BRIGHT_CYAN = '\033[96m'
 
 
 class SeedUI:
     """Terminal-based user interface for story seed generation"""
     
-    def __init__(self, llm_interface=None):
-        """
-        Initialize the seed UI
-        
-        Args:
-            llm_interface: Optional LLM interface for seed generation
-        """
-        self.generator = StorySeedGenerator(llm_interface)
-        self.current_seed: Optional[StorySeed] = None
-        self.clear_command = "clear" if os.name != "nt" else "cls"
+    def __init__(self):
+        """Initialize the UI system"""
+        self.generator = StorySeedGenerator()
+        self.current_seed = None
     
     def clear_screen(self):
         """Clear the terminal screen"""
-        os.system(self.clear_command)
+        os.system('clear' if os.name == 'posix' else 'cls')
     
     def display_welcome(self):
-        """Display welcome screen for seed generation"""
+        """Display welcome screen and main menu"""
         self.clear_screen()
         
-        title = "Cra-mud-gen Story Seed Generator"
-        rainbow_title = Effects.rainbow_text(title)
-        
-        print(f"{Colors.BRIGHT_CYAN}{'=' * 70}{Colors.RESET}")
-        print(f"           {rainbow_title}")
-        print(f"{Colors.BRIGHT_CYAN}{'=' * 70}{Colors.RESET}")
+        print(f"{Colors.BRIGHT_CYAN}{'=' * 60}{Colors.RESET}")
+        print(f"{Colors.BRIGHT_CYAN}          Welcome to Cra-mud-gen Story Creation          {Colors.RESET}")
+        print(f"{Colors.BRIGHT_CYAN}{'=' * 60}{Colors.RESET}")
         print()
-        print(f"{Colors.GLOW_YELLOW}Create compelling narrative-driven dungeons with AI-powered storytelling{Colors.RESET}")
-        print(f"{Colors.GLOW_CYAN}Choose your method below to generate a unique story seed.{Colors.RESET}")
+        print(f"{Colors.YELLOW}Create your personalized dungeon adventure story!{Colors.RESET}")
         print()
     
     def get_generation_method(self) -> str:
-        """
-        Get user's preferred seed generation method
+        """Get user's preferred generation method"""
         
-        Returns:
-            Selected method string
-        """
+        print(f"{Colors.BRIGHT_BLUE}Story Generation Methods:{Colors.RESET}")
+        print()
+        print(f"  {Colors.BRIGHT_GREEN}1.{Colors.RESET} {Colors.CYAN}Custom Sliders{Colors.RESET} - Fine-tune mood, danger, mystery levels")
+        print(f"  {Colors.BRIGHT_GREEN}2.{Colors.RESET} {Colors.YELLOW}Text Description{Colors.RESET} - Describe your story and let AI build it")
+        print(f"  {Colors.BRIGHT_GREEN}3.{Colors.RESET} {Colors.MAGENTA}Random Generation{Colors.RESET} - Surprise me with something new!")
+        print(f"  {Colors.BRIGHT_GREEN}4.{Colors.RESET} {Colors.WHITE}Load from File{Colors.RESET} - Use a previously saved seed")
+        print()
+        
         while True:
-            print(f"{Colors.BRIGHT_BLUE}Story Seed Generation Options:{Colors.RESET}")
-            print(f"  {Colors.BRIGHT_GREEN}1.{Colors.RESET} {Colors.YELLOW}Custom Sliders + Text{Colors.RESET} - Fine-tune mood and add custom elements")
-            print(f"  {Colors.BRIGHT_GREEN}2.{Colors.RESET} {Colors.CYAN}Text Only{Colors.RESET} - Describe your story idea in words")
-            print(f"  {Colors.BRIGHT_GREEN}3.{Colors.RESET} {Colors.MAGENTA}Pure Random{Colors.RESET} - Let AI create a surprise adventure")
-            print(f"  {Colors.BRIGHT_GREEN}4.{Colors.RESET} {Colors.WHITE}Load from File{Colors.RESET} - Import a previously saved seed")
-            print()
+            choice = input(f"{Colors.BRIGHT_BLUE}Choose generation method (1-4): {Colors.RESET}")
             
-            choice = input(f"{Colors.BRIGHT_BLUE}Choose option (1-4): {Colors.RESET}").strip()
+            method_map = {
+                '1': 'sliders',
+                '2': 'text_only', 
+                '3': 'random',
+                '4': 'load_file'
+            }
             
-            if choice == '1':
-                return 'sliders'
-            elif choice == '2':
-                return 'text_only'
-            elif choice == '3':
-                return 'random'
-            elif choice == '4':
-                return 'load_file'
+            if choice in method_map:
+                return method_map[choice]
             else:
                 print(f"{Colors.RED}Invalid choice. Please select 1-4.{Colors.RESET}")
-                print()
     
-    def get_slider_values(self) -> Tuple[Dict[str, int], str]:
-        """
-        Get slider values and custom text from user using text-based sliders
+    def get_slider_values(self) -> tuple:
+        """Get slider values and custom text from user"""
         
-        Returns:
-            Tuple of (slider_values_dict, custom_text)
-        """
         self.clear_screen()
-        print(f"{Colors.BRIGHT_CYAN}Story Mood Customization{Colors.RESET}")
-        print(f"{Colors.YELLOW}Adjust each slider from 1 (minimum) to 10 (maximum){Colors.RESET}")
+        print(f"{Colors.BRIGHT_CYAN}Story Mood Configuration{Colors.RESET}")
+        print(f"{Colors.YELLOW}Adjust the sliders to craft your perfect adventure tone{Colors.RESET}")
         print()
         
         sliders = {
-            'danger': {'name': 'Danger Level', 'desc': 'Combat, threats, and perilous situations', 'default': 5},
-            'discovery': {'name': 'Discovery Factor', 'desc': 'Exploration, secrets, and hidden treasures', 'default': 6},
-            'scary': {'name': 'Scary Factor', 'desc': 'Horror elements, fear, and suspense', 'default': 3},
+            'danger': {'name': 'Danger Level', 'desc': 'Combat intensity and life-threatening situations', 'default': 6},
+            'discovery': {'name': 'Discovery Factor', 'desc': 'Hidden secrets, lore, and exploration rewards', 'default': 7},
+            'scary': {'name': 'Scary Factor', 'desc': 'Horror elements, jump scares, and creepy atmosphere', 'default': 4},
             'mystery': {'name': 'Mystery Level', 'desc': 'Puzzles, intrigue, and unknown elements', 'default': 5},
             'comedy': {'name': 'Comedy Level', 'desc': 'Humor, lighthearted moments, and funny NPCs', 'default': 2}
         }
         
-        values = {}\n        \n        for key, info in sliders.items():\n            print(f\"{Colors.BRIGHT_BLUE}{info['name']}: {Colors.RESET}{info['desc']}\")\n            print(f\"{Colors.GRAY}Default: {info['default']}{Colors.RESET}\")\n            \n            while True:\n                try:\n                    user_input = input(f\"{Colors.CYAN}Enter value (1-10) or press Enter for default: {Colors.RESET}\")\n                    \n                    if user_input.strip() == '':\n                        values[key] = info['default']\n                        break\n                    \n                    value = int(user_input)\n                    if 1 <= value <= 10:\n                        values[key] = value\n                        break\n                    else:\n                        print(f\"{Colors.RED}Please enter a number between 1 and 10.{Colors.RESET}\")\n                        \n                except ValueError:\n                    print(f\"{Colors.RED}Please enter a valid number.{Colors.RESET}\")\n            \n            # Display the \"slider\" visually\n            self._display_slider(info['name'], values[key])\n            print()\n        \n        print(f\"{Colors.BRIGHT_YELLOW}Current Settings Summary:{Colors.RESET}\")\n        for key, info in sliders.items():\n            self._display_slider(info['name'], values[key], compact=True)\n        print()\n        \n        # Get custom text\n        print(f\"{Colors.BRIGHT_BLUE}Custom Story Elements (Optional):{Colors.RESET}\")\n        print(f\"{Colors.GRAY}Add any specific elements, themes, or inspirations{Colors.RESET}\")\n        print(f\"{Colors.GRAY}Examples: 'Aliens movie but with comedic NPCs', 'Sci-fi haunted house'{Colors.RESET}\")\n        print()\n        \n        custom_text = input(f\"{Colors.CYAN}Custom elements (press Enter to skip): {Colors.RESET}\")\n        \n        return values, custom_text.strip()\n    \n    def _display_slider(self, name: str, value: int, compact: bool = False):\n        \"\"\"Display a visual slider representation\"\"\"\n        bar_length = 10\n        filled = '█' * value\n        empty = '░' * (bar_length - value)\n        \n        if compact:\n            print(f\"  {Colors.CYAN}{name:15}{Colors.RESET} [{filled}{empty}] {value}/10\")\n        else:\n            print(f\"  {Colors.GREEN}[{filled}{empty}] {value}/10{Colors.RESET}\")\n    \n    def get_text_input(self) -> str:\n        \"\"\"\n        Get story description from user text input\n        \n        Returns:\n            User's story description\n        \"\"\"\n        self.clear_screen()\n        print(f\"{Colors.BRIGHT_CYAN}Text-Based Story Creation{Colors.RESET}\")\n        print(f\"{Colors.YELLOW}Describe your story idea and the AI will build a complete seed from it.{Colors.RESET}\")\n        print()\n        print(f\"{Colors.GRAY}Examples:{Colors.RESET}\")\n        print(f\"  • {Colors.CYAN}'Space station where crew discovers alien parasites'{Colors.RESET}\")\n        print(f\"  • {Colors.CYAN}'Medieval castle with a dragon and comedic knights'{Colors.RESET}\")\n        print(f\"  • {Colors.CYAN}'Cyberpunk heist in a corporate megabuilding'{Colors.RESET}\")\n        print(f\"  • {Colors.CYAN}'Horror mansion with friendly ghosts and dark secrets'{Colors.RESET}\")\n        print()\n        \n        while True:\n            story_text = input(f\"{Colors.BRIGHT_BLUE}Enter your story concept: {Colors.RESET}\")\n            \n            if story_text.strip():\n                return story_text.strip()\n            else:\n                print(f\"{Colors.RED}Please enter a story description.{Colors.RESET}\")\n    \n    def get_random_preferences(self) -> Optional[str]:\n        \"\"\"\n        Get theme preference for random generation\n        \n        Returns:\n            Theme preference or None for completely random\n        \"\"\"\n        self.clear_screen()\n        print(f\"{Colors.BRIGHT_CYAN}Random Story Generation{Colors.RESET}\")\n        print(f\"{Colors.YELLOW}Let the AI create a surprise adventure for you!{Colors.RESET}\")\n        print()\n        print(f\"{Colors.BRIGHT_BLUE}Theme Preferences:{Colors.RESET}\")\n        print(f\"  {Colors.BRIGHT_GREEN}1.{Colors.RESET} {Colors.YELLOW}Fantasy{Colors.RESET} - Magic, dragons, and ancient mysteries\")\n        print(f\"  {Colors.BRIGHT_GREEN}2.{Colors.RESET} {Colors.CYAN}Sci-Fi{Colors.RESET} - Space, technology, and alien encounters\")\n        print(f\"  {Colors.BRIGHT_GREEN}3.{Colors.RESET} {Colors.RED}Horror{Colors.RESET} - Fear, suspense, and supernatural threats\")\n        print(f\"  {Colors.BRIGHT_GREEN}4.{Colors.RESET} {Colors.MAGENTA}Cyberpunk{Colors.RESET} - Neon, hackers, and corporate intrigue\")\n        print(f\"  {Colors.BRIGHT_GREEN}5.{Colors.RESET} {Colors.WHITE}Complete Surprise{Colors.RESET} - Randomly choose everything\")\n        print()\n        \n        choice = input(f\"{Colors.BRIGHT_BLUE}Choose theme preference (1-5): {Colors.RESET}\")\n        \n        theme_map = {\n            '1': 'fantasy',\n            '2': 'sci-fi', \n            '3': 'horror',\n            '4': 'cyberpunk',\n            '5': None\n        }\n        \n        return theme_map.get(choice)\n    \n    def get_file_path(self) -> Optional[str]:\n        \"\"\"\n        Get file path for loading a seed\n        \n        Returns:\n            File path or None if cancelled\n        \"\"\"\n        print(f\"{Colors.BRIGHT_CYAN}Load Story Seed from File{Colors.RESET}\")\n        print()\n        \n        filepath = input(f\"{Colors.CYAN}Enter file path (or press Enter to cancel): {Colors.RESET}\")\n        \n        if not filepath.strip():\n            return None\n            \n        return filepath.strip()\n    \n    def display_seed_preview(self, seed: StorySeed) -> bool:\n        \"\"\"\n        Display seed preview and get user confirmation\n        \n        Args:\n            seed: StorySeed to display\n            \n        Returns:\n            True if user accepts, False to regenerate\n        \"\"\"\n        self.clear_screen()\n        \n        print(f\"{Colors.BRIGHT_CYAN}Generated Story Seed Preview{Colors.RESET}\")\n        print(f\"{Colors.BRIGHT_CYAN}{'=' * 50}{Colors.RESET}\")\n        print()\n        \n        # Basic info\n        print(f\"{Colors.BRIGHT_YELLOW}Theme:{Colors.RESET} {Colors.CYAN}{seed.theme.title()}{Colors.RESET}\")\n        print(f\"{Colors.BRIGHT_YELLOW}Setting:{Colors.RESET} {Colors.GREEN}{seed.setting}{Colors.RESET}\")\n        print()\n        \n        # Mood sliders\n        print(f\"{Colors.BRIGHT_BLUE}Mood Profile:{Colors.RESET}\")\n        moods = [\n            ('Danger', seed.danger_level),\n            ('Discovery', seed.discovery_factor),\n            ('Scary', seed.scary_factor),\n            ('Mystery', seed.mystery_level),\n            ('Comedy', seed.comedy_level)\n        ]\n        \n        for name, value in moods:\n            self._display_slider(name, value, compact=True)\n        print()\n        \n        # Story elements\n        if seed.conflict:\n            print(f\"{Colors.BRIGHT_YELLOW}Main Conflict:{Colors.RESET}\")\n            print(f\"  {Colors.WHITE}{seed.conflict}{Colors.RESET}\")\n            print()\n        \n        if seed.main_characters:\n            print(f\"{Colors.BRIGHT_YELLOW}Key Characters:{Colors.RESET}\")\n            for char in seed.main_characters[:3]:  # Show up to 3\n                print(f\"  • {Colors.CYAN}{char}{Colors.RESET}\")\n            print()\n        \n        if seed.story_beats:\n            print(f\"{Colors.BRIGHT_YELLOW}Story Progression:{Colors.RESET}\")\n            for i, beat in enumerate(seed.story_beats[:5], 1):  # Show up to 5\n                print(f\"  {Colors.BRIGHT_GREEN}{i}.{Colors.RESET} {Colors.WHITE}{beat}{Colors.RESET}\")\n            print()\n        \n        if seed.custom_text:\n            print(f\"{Colors.BRIGHT_YELLOW}Custom Elements:{Colors.RESET}\")\n            print(f\"  {Colors.GRAY}{seed.custom_text}{Colors.RESET}\")\n            print()\n        \n        # Generation info\n        method_names = {\n            'sliders': 'Custom Sliders + Text',\n            'text_only': 'Text Input Only',\n            'random': 'Random Generation',\n            'custom': 'Custom Configuration'\n        }\n        \n        print(f\"{Colors.GRAY}Generated via: {method_names.get(seed.generation_method, seed.generation_method)}{Colors.RESET}\")\n        if seed.iteration_count > 0:\n            print(f\"{Colors.GRAY}AI Iterations: {seed.iteration_count}{Colors.RESET}\")\n        print()\n        \n        # User choice\n        while True:\n            print(f\"{Colors.BRIGHT_BLUE}Options:{Colors.RESET}\")\n            print(f\"  {Colors.BRIGHT_GREEN}1.{Colors.RESET} {Colors.YELLOW}Accept and Start Game{Colors.RESET}\")\n            print(f\"  {Colors.BRIGHT_GREEN}2.{Colors.RESET} {Colors.CYAN}Regenerate with Same Settings{Colors.RESET}\")\n            print(f\"  {Colors.BRIGHT_GREEN}3.{Colors.RESET} {Colors.MAGENTA}Go Back to Method Selection{Colors.RESET}\")\n            print(f\"  {Colors.BRIGHT_GREEN}4.{Colors.RESET} {Colors.WHITE}Save Seed to File{Colors.RESET}\")\n            print()\n            \n            choice = input(f\"{Colors.BRIGHT_BLUE}Choose option (1-4): {Colors.RESET}\")\n            \n            if choice == '1':\n                return True\n            elif choice == '2':\n                return False\n            elif choice == '3':\n                return None  # Signal to restart method selection\n            elif choice == '4':\n                self._save_seed_to_file(seed)\n                print(f\"{Colors.GREEN}Seed saved! Press Enter to continue...{Colors.RESET}\")\n                input()\n                continue\n            else:\n                print(f\"{Colors.RED}Invalid choice. Please select 1-4.{Colors.RESET}\")\n    \n    def _save_seed_to_file(self, seed: StorySeed):\n        \"\"\"Save seed to user-specified file\"\"\"\n        while True:\n            filename = input(f\"{Colors.CYAN}Enter filename (without .json): {Colors.RESET}\")\n            if filename.strip():\n                filepath = f\"{filename.strip()}.json\"\n                if self.generator.export_seed(seed, filepath):\n                    print(f\"{Colors.GREEN}Seed saved to {filepath}{Colors.RESET}\")\n                    return\n                else:\n                    print(f\"{Colors.RED}Failed to save seed. Try a different filename.{Colors.RESET}\")\n            else:\n                print(f\"{Colors.RED}Please enter a valid filename.{Colors.RESET}\")\n    \n    def display_generation_progress(self, method: str, iteration: int = 0):\n        \"\"\"Display progress while generating seed\"\"\"\n        messages = {\n            'sliders': [\n                \"Analyzing your mood preferences...\",\n                \"Incorporating custom elements...\",\n                \"Building story structure...\",\n                \"Finalizing narrative details...\"\n            ],\n            'text_only': [\n                \"Processing your story concept...\",\n                \"Enhancing narrative complexity...\",\n                \"Adding character depth...\",\n                \"Polishing story details...\"\n            ],\n            'random': [\n                \"Rolling cosmic dice...\",\n                \"Consulting the story spirits...\",\n                \"Weaving narrative threads...\",\n                \"Adding surprise elements...\"\n            ]\n        }\n        \n        method_messages = messages.get(method, messages['sliders'])\n        \n        if iteration < len(method_messages):\n            message = method_messages[iteration]\n            print(f\"{Colors.BRIGHT_YELLOW}🎲 {message}{Colors.RESET}\")\n            print(f\"{Colors.CYAN}{'.' * (iteration * 3 + 3)}{Colors.RESET}\")\n            print()\n    \n    def display_error(self, error_message: str):\n        \"\"\"Display error message\"\"\"\n        print(f\"{Colors.RED}Error: {error_message}{Colors.RESET}\")\n        print(f\"{Colors.GRAY}Press Enter to continue...{Colors.RESET}\")\n        input()\n    \n    def run_seed_generation_flow(self) -> Optional[StorySeed]:\n        \"\"\"\n        Run the complete seed generation flow\n        \n        Returns:\n            Generated StorySeed or None if cancelled\n        \"\"\"\n        while True:\n            self.display_welcome()\n            method = self.get_generation_method()\n            \n            try:\n                seed = None\n                \n                if method == 'sliders':\n                    slider_values, custom_text = self.get_slider_values()\n                    self.clear_screen()\n                    self.display_generation_progress('sliders', 0)\n                    \n                    seed = self.generator.generate_from_sliders(slider_values, custom_text)\n                    \n                elif method == 'text_only':\n                    story_text = self.get_text_input()\n                    self.clear_screen()\n                    self.display_generation_progress('text_only', 0)\n                    \n                    seed = self.generator.generate_from_text(story_text)\n                    \n                elif method == 'random':\n                    theme_pref = self.get_random_preferences()\n                    self.clear_screen()\n                    self.display_generation_progress('random', 0)\n                    \n                    seed = self.generator.generate_random(theme_pref)\n                    \n                elif method == 'load_file':\n                    filepath = self.get_file_path()\n                    if not filepath:\n                        continue  # Back to method selection\n                    \n                    seed = self.generator.import_seed(filepath)\n                    if not seed:\n                        self.display_error(\"Failed to load seed from file\")\n                        continue\n                \n                if seed:\n                    # Validate seed\n                    is_valid, issues = self.generator.validate_seed(seed)\n                    if not is_valid:\n                        self.display_error(f\"Generated seed has issues: {', '.join(issues)}\")\n                        continue\n                    \n                    # Show preview and get user decision\n                    result = self.display_seed_preview(seed)\n                    \n                    if result is True:\n                        # User accepted\n                        self.current_seed = seed\n                        return seed\n                    elif result is False:\n                        # Regenerate with same method\n                        continue\n                    elif result is None:\n                        # Go back to method selection\n                        continue\n                    \n            except Exception as e:\n                self.display_error(f\"An error occurred during generation: {str(e)}\")\n                continue\n        \n        return None\n    \n    def get_current_seed(self) -> Optional[StorySeed]:\n        \"\"\"Get the currently generated seed\"\"\"\n        return self.current_seed"
+        values = {}
+        
+        for key, info in sliders.items():
+            print(f"{Colors.BRIGHT_BLUE}{info['name']}: {Colors.RESET}{info['desc']}")
+            print(f"{Colors.GRAY}Default: {info['default']}{Colors.RESET}")
+            
+            while True:
+                try:
+                    user_input = input(f"{Colors.CYAN}Enter value (1-10) or press Enter for default: {Colors.RESET}")
+                    
+                    if user_input.strip() == '':
+                        values[key] = info['default']
+                        break
+                    
+                    value = int(user_input)
+                    if 1 <= value <= 10:
+                        values[key] = value
+                        break
+                    else:
+                        print(f"{Colors.RED}Please enter a number between 1 and 10.{Colors.RESET}")
+                        
+                except ValueError:
+                    print(f"{Colors.RED}Please enter a valid number.{Colors.RESET}")
+            
+            # Display the "slider" visually
+            self._display_slider(info['name'], values[key])
+            print()
+        
+        print(f"{Colors.BRIGHT_YELLOW}Current Settings Summary:{Colors.RESET}")
+        for key, info in sliders.items():
+            self._display_slider(info['name'], values[key], compact=True)
+        print()
+        
+        # Get custom text
+        print(f"{Colors.BRIGHT_BLUE}Custom Story Elements (Optional):{Colors.RESET}")
+        print(f"{Colors.GRAY}Add any specific elements, themes, or inspirations{Colors.RESET}")
+        print(f"{Colors.GRAY}Examples: 'Aliens movie but with comedic NPCs', 'Sci-fi haunted house'{Colors.RESET}")
+        print()
+        
+        custom_text = input(f"{Colors.CYAN}Custom elements (press Enter to skip): {Colors.RESET}")
+        
+        return values, custom_text.strip()
+    
+    def _display_slider(self, name: str, value: int, compact: bool = False):
+        """Display a visual slider representation"""
+        bar_length = 10
+        filled = '█' * value
+        empty = '░' * (bar_length - value)
+        
+        if compact:
+            print(f"  {Colors.CYAN}{name:15}{Colors.RESET} [{filled}{empty}] {value}/10")
+        else:
+            print(f"  {Colors.GREEN}[{filled}{empty}] {value}/10{Colors.RESET}")
+    
+    def get_text_input(self) -> str:
+        """Get story description from user text input"""
+        
+        self.clear_screen()
+        print(f"{Colors.BRIGHT_CYAN}Text-Based Story Creation{Colors.RESET}")
+        print(f"{Colors.YELLOW}Describe your story idea and the AI will build a complete seed from it.{Colors.RESET}")
+        print()
+        print(f"{Colors.GRAY}Examples:{Colors.RESET}")
+        print(f"  • {Colors.CYAN}'Space station where crew discovers alien parasites'{Colors.RESET}")
+        print(f"  • {Colors.CYAN}'Medieval castle with a dragon and comedic knights'{Colors.RESET}")
+        print(f"  • {Colors.CYAN}'Cyberpunk heist in a corporate megabuilding'{Colors.RESET}")
+        print(f"  • {Colors.CYAN}'Horror mansion with friendly ghosts and dark secrets'{Colors.RESET}")
+        print()
+        
+        while True:
+            story_text = input(f"{Colors.BRIGHT_BLUE}Enter your story concept: {Colors.RESET}")
+            
+            if story_text.strip():
+                return story_text.strip()
+            else:
+                print(f"{Colors.RED}Please enter a story description.{Colors.RESET}")
+    
+    def get_random_preferences(self) -> Optional[str]:
+        """Get theme preference for random generation"""
+        
+        self.clear_screen()
+        print(f"{Colors.BRIGHT_CYAN}Random Story Generation{Colors.RESET}")
+        print(f"{Colors.YELLOW}Let the AI create a surprise adventure for you!{Colors.RESET}")
+        print()
+        print(f"{Colors.BRIGHT_BLUE}Theme Preferences:{Colors.RESET}")
+        print(f"  {Colors.BRIGHT_GREEN}1.{Colors.RESET} {Colors.YELLOW}Fantasy{Colors.RESET} - Magic, dragons, and ancient mysteries")
+        print(f"  {Colors.BRIGHT_GREEN}2.{Colors.RESET} {Colors.CYAN}Sci-Fi{Colors.RESET} - Space, technology, and alien encounters")
+        print(f"  {Colors.BRIGHT_GREEN}3.{Colors.RESET} {Colors.RED}Horror{Colors.RESET} - Fear, suspense, and supernatural threats")
+        print(f"  {Colors.BRIGHT_GREEN}4.{Colors.RESET} {Colors.MAGENTA}Cyberpunk{Colors.RESET} - Neon, hackers, and corporate intrigue")
+        print(f"  {Colors.BRIGHT_GREEN}5.{Colors.RESET} {Colors.WHITE}Complete Surprise{Colors.RESET} - Randomly choose everything")
+        print()
+        
+        choice = input(f"{Colors.BRIGHT_BLUE}Choose theme preference (1-5): {Colors.RESET}")
+        
+        theme_map = {
+            '1': 'fantasy',
+            '2': 'sci-fi', 
+            '3': 'horror',
+            '4': 'cyberpunk',
+            '5': None
+        }
+        
+        return theme_map.get(choice)
+    
+    def get_file_path(self) -> Optional[str]:
+        """Get file path for loading a seed"""
+        
+        print(f"{Colors.BRIGHT_CYAN}Load Story Seed from File{Colors.RESET}")
+        print()
+        
+        filepath = input(f"{Colors.CYAN}Enter file path (or press Enter to cancel): {Colors.RESET}")
+        
+        if not filepath.strip():
+            return None
+            
+        return filepath.strip()
+    
+    def display_seed_preview(self, seed: StorySeed) -> Optional[bool]:
+        """Display seed preview and get user confirmation"""
+        
+        self.clear_screen()
+        
+        print(f"{Colors.BRIGHT_CYAN}Generated Story Seed Preview{Colors.RESET}")
+        print(f"{Colors.BRIGHT_CYAN}{'=' * 50}{Colors.RESET}")
+        print()
+        
+        # Basic info
+        print(f"{Colors.BRIGHT_YELLOW}Theme:{Colors.RESET} {Colors.CYAN}{seed.theme.title()}{Colors.RESET}")
+        print(f"{Colors.BRIGHT_YELLOW}Setting:{Colors.RESET} {Colors.GREEN}{seed.setting}{Colors.RESET}")
+        print()
+        
+        # Mood sliders
+        print(f"{Colors.BRIGHT_BLUE}Mood Profile:{Colors.RESET}")
+        moods = [
+            ('Danger', seed.danger_level),
+            ('Discovery', seed.discovery_factor),
+            ('Scary', seed.scary_factor),
+            ('Mystery', seed.mystery_level),
+            ('Comedy', seed.comedy_level)
+        ]
+        
+        for name, value in moods:
+            self._display_slider(name, value, compact=True)
+        print()
+        
+        # Story elements
+        if seed.conflict:
+            print(f"{Colors.BRIGHT_YELLOW}Main Conflict:{Colors.RESET}")
+            print(f"  {Colors.WHITE}{seed.conflict}{Colors.RESET}")
+            print()
+        
+        if seed.main_characters:
+            print(f"{Colors.BRIGHT_YELLOW}Key Characters:{Colors.RESET}")
+            for char in seed.main_characters[:3]:  # Show up to 3
+                print(f"  • {Colors.CYAN}{char}{Colors.RESET}")
+            print()
+        
+        if seed.story_beats:
+            print(f"{Colors.BRIGHT_YELLOW}Story Progression:{Colors.RESET}")
+            for i, beat in enumerate(seed.story_beats[:5], 1):  # Show up to 5
+                print(f"  {Colors.BRIGHT_GREEN}{i}.{Colors.RESET} {Colors.WHITE}{beat}{Colors.RESET}")
+            print()
+        
+        if seed.custom_text:
+            print(f"{Colors.BRIGHT_YELLOW}Custom Elements:{Colors.RESET}")
+            print(f"  {Colors.GRAY}{seed.custom_text}{Colors.RESET}")
+            print()
+        
+        # Generation info
+        method_names = {
+            'sliders': 'Custom Sliders + Text',
+            'text_only': 'Text Input Only',
+            'random': 'Random Generation',
+            'custom': 'Custom Configuration'
+        }
+        
+        print(f"{Colors.GRAY}Generated via: {method_names.get(seed.generation_method, seed.generation_method)}{Colors.RESET}")
+        if seed.iteration_count > 0:
+            print(f"{Colors.GRAY}AI Iterations: {seed.iteration_count}{Colors.RESET}")
+        print()
+        
+        # User choice
+        while True:
+            print(f"{Colors.BRIGHT_BLUE}Options:{Colors.RESET}")
+            print(f"  {Colors.BRIGHT_GREEN}1.{Colors.RESET} {Colors.YELLOW}Accept and Start Game{Colors.RESET}")
+            print(f"  {Colors.BRIGHT_GREEN}2.{Colors.RESET} {Colors.CYAN}Regenerate with Same Settings{Colors.RESET}")
+            print(f"  {Colors.BRIGHT_GREEN}3.{Colors.RESET} {Colors.MAGENTA}Go Back to Method Selection{Colors.RESET}")
+            print(f"  {Colors.BRIGHT_GREEN}4.{Colors.RESET} {Colors.WHITE}Save Seed to File{Colors.RESET}")
+            print()
+            
+            choice = input(f"{Colors.BRIGHT_BLUE}Choose option (1-4): {Colors.RESET}")
+            
+            if choice == '1':
+                return True
+            elif choice == '2':
+                return False
+            elif choice == '3':
+                return None  # Signal to restart method selection
+            elif choice == '4':
+                self._save_seed_to_file(seed)
+                print(f"{Colors.GREEN}Seed saved! Press Enter to continue...{Colors.RESET}")
+                input()
+                continue
+            else:
+                print(f"{Colors.RED}Invalid choice. Please select 1-4.{Colors.RESET}")
+    
+    def _save_seed_to_file(self, seed: StorySeed):
+        """Save seed to user-specified file"""
+        while True:
+            filename = input(f"{Colors.CYAN}Enter filename (without .json): {Colors.RESET}")
+            if filename.strip():
+                filepath = f"{filename.strip()}.json"
+                if self.generator.export_seed(seed, filepath):
+                    print(f"{Colors.GREEN}Seed saved to {filepath}{Colors.RESET}")
+                    return
+                else:
+                    print(f"{Colors.RED}Failed to save seed. Try a different filename.{Colors.RESET}")
+            else:
+                print(f"{Colors.RED}Please enter a valid filename.{Colors.RESET}")
+    
+    def display_generation_progress(self, method: str, iteration: int = 0):
+        """Display progress while generating seed"""
+        messages = {
+            'sliders': [
+                "Analyzing your mood preferences...",
+                "Incorporating custom elements...",
+                "Building story structure...",
+                "Finalizing narrative details..."
+            ],
+            'text_only': [
+                "Processing your story concept...",
+                "Enhancing narrative complexity...",
+                "Adding character depth...",
+                "Polishing story details..."
+            ],
+            'random': [
+                "Rolling cosmic dice...",
+                "Consulting the story spirits...",
+                "Weaving narrative threads...",
+                "Adding surprise elements..."
+            ]
+        }
+        
+        method_messages = messages.get(method, messages['sliders'])
+        
+        if iteration < len(method_messages):
+            message = method_messages[iteration]
+            print(f"{Colors.BRIGHT_YELLOW}🎲 {message}{Colors.RESET}")
+            print(f"{Colors.CYAN}{'.' * (iteration * 3 + 3)}{Colors.RESET}")
+            print()
+    
+    def display_error(self, error_message: str):
+        """Display error message"""
+        print(f"{Colors.RED}Error: {error_message}{Colors.RESET}")
+        print(f"{Colors.GRAY}Press Enter to continue...{Colors.RESET}")
+        input()
+    
+    def run_seed_generation_flow(self) -> Optional[StorySeed]:
+        """Run the complete seed generation flow"""
+        
+        while True:
+            self.display_welcome()
+            method = self.get_generation_method()
+            
+            try:
+                seed = None
+                
+                if method == 'sliders':
+                    slider_values, custom_text = self.get_slider_values()
+                    self.clear_screen()
+                    self.display_generation_progress('sliders', 0)
+                    
+                    seed = self.generator.generate_from_sliders(slider_values, custom_text)
+                    
+                elif method == 'text_only':
+                    story_text = self.get_text_input()
+                    self.clear_screen()
+                    self.display_generation_progress('text_only', 0)
+                    
+                    seed = self.generator.generate_from_text(story_text)
+                    
+                elif method == 'random':
+                    theme_pref = self.get_random_preferences()
+                    self.clear_screen()
+                    self.display_generation_progress('random', 0)
+                    
+                    seed = self.generator.generate_random(theme_pref)
+                    
+                elif method == 'load_file':
+                    filepath = self.get_file_path()
+                    if not filepath:
+                        continue  # Back to method selection
+                    
+                    seed = self.generator.import_seed(filepath)
+                    if not seed:
+                        self.display_error("Failed to load seed from file")
+                        continue
+                
+                if seed:
+                    # Validate seed
+                    is_valid, issues = self.generator.validate_seed(seed)
+                    if not is_valid:
+                        self.display_error(f"Generated seed has issues: {', '.join(issues)}")
+                        continue
+                    
+                    # Show preview and get user decision
+                    result = self.display_seed_preview(seed)
+                    
+                    if result is True:
+                        # User accepted
+                        self.current_seed = seed
+                        return seed
+                    elif result is False:
+                        # Regenerate with same method
+                        continue
+                    elif result is None:
+                        # Go back to method selection
+                        continue
+                    
+            except Exception as e:
+                self.display_error(f"An error occurred during generation: {str(e)}")
+                continue
+        
+        return None
+    
+    def get_current_seed(self) -> Optional[StorySeed]:
+        """Get the currently generated seed"""
+        return self.current_seed

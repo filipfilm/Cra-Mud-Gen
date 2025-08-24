@@ -90,14 +90,14 @@ class World:
         
         # Add ASCII art for starting room
         if random.random() < 0.5:  # 50% chance for starting room art
-            ascii_art = self._generate_room_ascii_art("entrance", theme, "mysterious", "doorway")
+            ascii_art = self._generate_room_ascii_art("entrance", current_theme, "mysterious", "doorway")
             if ascii_art:
                 description = f"{ascii_art}\n\n{description}"
         
         room = Room(
             room_id="start",
             description=description,
-            items=self._get_room_items("entrance", theme),
+            items=self._get_room_items("entrance", current_theme),
             npcs=[],  # No NPCs in starting room
             connections=connections
         )
