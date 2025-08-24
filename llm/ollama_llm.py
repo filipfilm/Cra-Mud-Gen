@@ -65,7 +65,7 @@ class OllamaLLM:
                         size_str = f"{size}B"
                     
                     # Parse model family for better descriptions
-                    model_family = name.split(':')[0].lower()
+                    model_family = name.split(':')[0].lower() if ':' in name else name.lower()
                     descriptions = {
                         "mistral": "Excellent for creative writing and storytelling",
                         "llama": "Great general purpose model, good balance",  
@@ -301,7 +301,7 @@ CRITICAL RULES:
         """
         Get optimized options based on the model type
         """
-        model_family = self.model_name.split(':')[0].lower()
+        model_family = self.model_name.split(':')[0].lower() if ':' in self.model_name else self.model_name.lower()
         
         # Base options for different model families
         model_configs = {
@@ -309,49 +309,49 @@ CRITICAL RULES:
                 "temperature": 0.85,
                 "top_p": 0.92,
                 "top_k": 40,
-                "num_predict": 150 if not art_mode else 100,
+                "num_predict": 300 if not art_mode else 100,
                 "stop": ["\n\n", "Request:", "Response:"] if not art_mode else ["\n\n\n", "Explanation:", "Note:"]
             },
             "llama": {
                 "temperature": 0.8,
                 "top_p": 0.9,
                 "top_k": 40,
-                "num_predict": 120 if not art_mode else 80,
+                "num_predict": 280 if not art_mode else 80,
                 "stop": ["\n\n", "Human:", "Assistant:"] if not art_mode else ["\n\n\n", "Explanation:"]
             },
             "gemma": {
                 "temperature": 0.75,
                 "top_p": 0.9,
                 "top_k": 30,
-                "num_predict": 100 if not art_mode else 60,
+                "num_predict": 200 if not art_mode else 60,
                 "stop": ["\n\n", "User:", "Model:"] if not art_mode else ["\n\n\n"]
             },
             "phi": {
                 "temperature": 0.8,
                 "top_p": 0.85,
                 "top_k": 35,
-                "num_predict": 80 if not art_mode else 50,
+                "num_predict": 180 if not art_mode else 50,
                 "stop": ["\n\n"] if not art_mode else ["\n\n\n"]
             },
             "qwen": {
                 "temperature": 0.8,
                 "top_p": 0.9,
                 "top_k": 40,
-                "num_predict": 120 if not art_mode else 80,
+                "num_predict": 250 if not art_mode else 80,
                 "stop": ["\n\n", "Human:", "Assistant:"] if not art_mode else ["\n\n\n", "Explanation:"]
             },
             "neural-chat": {
                 "temperature": 0.85,
                 "top_p": 0.9,
                 "top_k": 40,
-                "num_predict": 130 if not art_mode else 90,
+                "num_predict": 260 if not art_mode else 90,
                 "stop": ["\n\n", "User:", "Assistant:"] if not art_mode else ["\n\n\n", "Note:"]
             },
             "tinyllama": {
                 "temperature": 0.9,
                 "top_p": 0.95,
                 "top_k": 50,
-                "num_predict": 60 if not art_mode else 40,
+                "num_predict": 150 if not art_mode else 40,
                 "stop": ["\n\n"] if not art_mode else ["\n\n\n"]
             }
         }

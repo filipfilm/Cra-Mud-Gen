@@ -14,7 +14,11 @@ class ContextualEffects:
 
     @staticmethod
     def apply_room_effect(
-        room_description: str, theme: str, duration: float = 1.5, llm=None, fallback_mode=False
+        room_description: str,
+        theme: str,
+        duration: float = 1.5,
+        llm=None,
+        fallback_mode=False,
     ):
         """
         Apply visual effects based on room description keywords
@@ -184,7 +188,9 @@ class ContextualEffects:
         """
         if not llm:
             if not fallback_mode:
-                raise RuntimeError("LLM is required for contextual effects (fallback mode disabled)")
+                raise RuntimeError(
+                    "LLM is required for contextual effects (fallback mode disabled)"
+                )
             # Fallback to simple dynamic messages if no LLM
             fallbacks = {
                 "water": [
@@ -260,7 +266,7 @@ Format it with appropriate symbols like:
 Keep it evocative and thematic. Only return the formatted message."""
 
         try:
-            response = llm.generate_response(prompt)
+            response = llm.generate_game_response(prompt, {"theme": theme})
             # Clean response and ensure it has symbols
             cleaned = response.strip()
             if not any(
@@ -285,7 +291,9 @@ Keep it evocative and thematic. Only return the formatted message."""
             return cleaned
         except Exception as e:
             if not fallback_mode:
-                raise RuntimeError(f"LLM contextual effect generation failed and fallback mode disabled: {e}")
+                raise RuntimeError(
+                    f"LLM contextual effect generation failed and fallback mode disabled: {e}"
+                )
             # Fallback if LLM fails
             fallbacks = {
                 "water": "~ Water ripples softly ~",
@@ -303,7 +311,11 @@ Keep it evocative and thematic. Only return the formatted message."""
 
     @staticmethod
     def apply_item_effect(
-        item_name: str, theme: str, action: str = "examine", llm=None, fallback_mode: bool = False
+        item_name: str,
+        theme: str,
+        action: str = "examine",
+        llm=None,
+        fallback_mode: bool = False,
     ):
         """
         Apply effects based on item examination or interaction
@@ -390,7 +402,9 @@ Keep it evocative and thematic. Only return the formatted message."""
         """Generate dynamic item effect message using LLM"""
         if not llm:
             if not fallback_mode:
-                raise RuntimeError("LLM is required for item effects (fallback mode disabled)")
+                raise RuntimeError(
+                    "LLM is required for item effects (fallback mode disabled)"
+                )
             templates = {
                 "legendary": f"✧ The {item_name} radiates power ✧",
                 "fire": f"≈ The {item_name} flickers with flame ≈",
@@ -410,11 +424,13 @@ Generate a brief effect message (4-8 words) describing this item's properties.
 Format with symbols: ✧ for legendary/magical, ≈ for fire, ⚡ for electric, ▓ for cursed.
 Mention the item name. Only return the formatted message."""
 
-            response = llm.generate_response(prompt)
+            response = llm.generate_game_response(prompt, {"theme": theme, "item_name": item_name})
             return response.strip()
         except Exception as e:
             if not fallback_mode:
-                raise RuntimeError(f"LLM item effect generation failed and fallback mode disabled: {e}")
+                raise RuntimeError(
+                    f"LLM item effect generation failed and fallback mode disabled: {e}"
+                )
             templates = {
                 "legendary": f"✧ The {item_name} radiates ancient power ✧",
                 "fire": f"≈ The {item_name} flickers with inner flame ≈",

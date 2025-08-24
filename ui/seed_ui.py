@@ -4,6 +4,8 @@ Provides interactive interface for creating story seeds using sliders, text, or 
 """
 import os
 import sys
+import textwrap
+from pathlib import Path
 from typing import Optional, Dict, Any
 from core.story_seed_generator import StorySeed, StorySeedGenerator
 
@@ -206,12 +208,34 @@ class SeedUI:
         print(f"{Colors.BRIGHT_CYAN}Load Story Seed from File{Colors.RESET}")
         print()
         
-        filepath = input(f"{Colors.CYAN}Enter file path (or press Enter to cancel): {Colors.RESET}")
+        # Show available files in seeds directory if it exists
+        seeds_dir = Path("seeds")
+        if seeds_dir.exists() and seeds_dir.is_dir():
+            seed_files = list(seeds_dir.glob("*.json"))
+            if seed_files:
+                print(f"{Colors.YELLOW}Available seed files:{Colors.RESET}")
+                for i, file in enumerate(seed_files, 1):
+                    print(f"  {Colors.BRIGHT_GREEN}{i}.{Colors.RESET} {Colors.CYAN}{file.name}{Colors.RESET}")
+                print()
+        
+        filepath = input(f"{Colors.CYAN}Enter filename (or full path, or press Enter to cancel): {Colors.RESET}")
         
         if not filepath.strip():
             return None
+        
+        filepath = filepath.strip()
+        
+        # If it's just a filename, look in seeds directory first
+        if not os.path.sep in filepath and not filepath.startswith(('./', '../')):
+            seeds_path = seeds_dir / filepath
+            if not filepath.endswith('.json'):
+                seeds_path = seeds_dir / f"{filepath}.json"
             
-        return filepath.strip()
+            if seeds_path.exists():
+                return str(seeds_path)
+        
+        # Otherwise return as-is (could be full path or relative path)
+        return filepath
     
     def display_seed_preview(self, seed: StorySeed) -> Optional[bool]:
         """Display seed preview and get user confirmation"""
@@ -244,7 +268,10 @@ class SeedUI:
         # Story elements
         if seed.conflict:
             print(f"{Colors.BRIGHT_YELLOW}Main Conflict:{Colors.RESET}")
-            print(f"  {Colors.WHITE}{seed.conflict}{Colors.RESET}")
+            # Wrap text to prevent cutoff
+            wrapped_lines = textwrap.wrap(seed.conflict, width=76, initial_indent="  ", subsequent_indent="  ")
+            for line in wrapped_lines:
+                print(f"{Colors.WHITE}{line}{Colors.RESET}")
             print()
         
         if seed.main_characters:
@@ -256,12 +283,21 @@ class SeedUI:
         if seed.story_beats:
             print(f"{Colors.BRIGHT_YELLOW}Story Progression:{Colors.RESET}")
             for i, beat in enumerate(seed.story_beats[:5], 1):  # Show up to 5
-                print(f"  {Colors.BRIGHT_GREEN}{i}.{Colors.RESET} {Colors.WHITE}{beat}{Colors.RESET}")
+                # Wrap long story beats
+                wrapped_lines = textwrap.wrap(beat, width=74, initial_indent=f"  {i}. ", subsequent_indent="     ")
+                for j, line in enumerate(wrapped_lines):
+                    if j == 0:
+                        print(f"  {Colors.BRIGHT_GREEN}{i}.{Colors.RESET} {Colors.WHITE}{line[4:]}{Colors.RESET}")
+                    else:
+                        print(f"     {Colors.WHITE}{line[5:]}{Colors.RESET}")
             print()
         
         if seed.custom_text:
             print(f"{Colors.BRIGHT_YELLOW}Custom Elements:{Colors.RESET}")
-            print(f"  {Colors.GRAY}{seed.custom_text}{Colors.RESET}")
+            # Wrap custom text
+            wrapped_lines = textwrap.wrap(seed.custom_text, width=76, initial_indent="  ", subsequent_indent="  ")
+            for line in wrapped_lines:
+                print(f"{Colors.GRAY}{line}{Colors.RESET}")
             print()
         
         # Generation info
@@ -304,11 +340,15 @@ class SeedUI:
     
     def _save_seed_to_file(self, seed: StorySeed):
         """Save seed to user-specified file"""
+        # Create seeds directory if it doesn't exist
+        seeds_dir = Path("seeds")
+        seeds_dir.mkdir(exist_ok=True)
+        
         while True:
             filename = input(f"{Colors.CYAN}Enter filename (without .json): {Colors.RESET}")
             if filename.strip():
-                filepath = f"{filename.strip()}.json"
-                if self.generator.export_seed(seed, filepath):
+                filepath = seeds_dir / f"{filename.strip()}.json"
+                if self.generator.export_seed(seed, str(filepath)):
                     print(f"{Colors.GREEN}Seed saved to {filepath}{Colors.RESET}")
                     return
                 else:

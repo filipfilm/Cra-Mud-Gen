@@ -468,7 +468,7 @@ Expand to 4-5 sentences with richer detail.
         
         else:  # iteration == 2
             # Add specific details and hooks
-            return f"""Create the final, detailed story concept:
+            return f"""Create the final, detailed story concept with complete details:
 
 Current story elements:
 Setting: {seed.setting}
@@ -476,13 +476,13 @@ Conflict: {seed.conflict}
 Characters: {', '.join(seed.main_characters) if seed.main_characters else 'TBD'}
 {base_info}
 
-Create a rich, specific story concept that includes:
-- Named characters with clear roles
-- Specific organizations, locations, or entities
-- Concrete story hooks and mysteries
-- Clear progression path for the adventure
+Write a rich, complete story concept that includes:
+- Named characters with full names and clear roles (e.g., "Sir Marcus Blackwood, veteran knight")
+- Specific organizations, locations, or entities with descriptive names
+- Concrete story hooks and mysteries that drive the plot forward
+- A clear progression path showing how the adventure unfolds step by step
 
-Make it detailed and immersive (6-8 sentences).
+Write 6-8 complete sentences. Ensure each sentence is fully finished without cutting off mid-thought. Include specific character names, place names, and plot details that bring the story to life.
 """
     
     def _parse_llm_response(self, seed: StorySeed, response: str, iteration: int) -> StorySeed:
@@ -515,10 +515,16 @@ Make it detailed and immersive (6-8 sentences).
         elif iteration == 1:
             # Enhanced story with complexity
             seed.conflict = response
-            # Extract potential story beats
-            sentences = response.split('. ')
+            # Extract potential story beats from sentences
+            sentences = [s.strip() for s in response.split('.') if s.strip()]
             if len(sentences) >= 3:
-                seed.story_beats = sentences[:5]
+                # Create numbered story beats
+                seed.story_beats = []
+                for i, sentence in enumerate(sentences[:5]):
+                    # Clean up sentence and make it a proper story beat
+                    clean_sentence = sentence.strip().rstrip('.,!?')
+                    if clean_sentence and len(clean_sentence) > 10:  # Only meaningful sentences
+                        seed.story_beats.append(clean_sentence)
         
         else:  # iteration == 2
             # Final detailed story
@@ -528,10 +534,40 @@ Make it detailed and immersive (6-8 sentences).
             
             # Try to extract names (capitalized words that might be characters/places)
             import re
-            proper_nouns = re.findall(r'\b[A-Z][a-z]+\b', response)
-            if proper_nouns:
-                seed.main_characters.extend(proper_nouns[:3])
-                seed.supporting_npcs.extend(proper_nouns[3:6])
+            
+            # Look for clear character patterns first
+            character_patterns = [
+                r'\b(Sir|Lady|Lord|Captain|General|Master|Doctor|Professor)\s+([A-Z][a-z]+(?:\s+[A-Z][a-z]+)*)\b',
+                r'\b([A-Z][a-z]+\s+[A-Z][a-z]+)\b',  # First Last name patterns
+                r'\b([A-Z][a-z]{3,})\s+(the|of|from)\b',  # Names with titles
+            ]
+            
+            found_characters = []
+            for pattern in character_patterns:
+                matches = re.findall(pattern, response)
+                for match in matches:
+                    if isinstance(match, tuple):
+                        name = ' '.join(m for m in match if m and not m.lower() in ['the', 'of', 'from'])
+                    else:
+                        name = match
+                    
+                    if name and len(name) > 2:
+                        found_characters.append(name)
+            
+            # Fallback to proper nouns but filter out common words
+            if not found_characters:
+                proper_nouns = re.findall(r'\b[A-Z][a-z]{3,}\b', response)
+                common_words = {'You', 'The', 'This', 'That', 'They', 'There', 'Your', 'Their', 'Heart', 'Sanctum', 'Temple', 'Chasm', 'Echo', 'Echoes', 'Magic', 'Order', 'past', 'Past', 'Time', 'Space'}
+                found_characters = [noun for noun in proper_nouns if noun not in common_words]
+            
+            if found_characters:
+                # Clear existing characters first to avoid duplication
+                existing = set(seed.main_characters)
+                new_chars = [char for char in found_characters[:3] if char not in existing]
+                seed.main_characters.extend(new_chars[:3])
+                
+                remaining = [char for char in found_characters[3:] if char not in existing and char not in new_chars]
+                seed.supporting_npcs.extend(remaining[:3])
         
         return seed
     

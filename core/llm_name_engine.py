@@ -40,16 +40,27 @@ class LLMNameEngine:
         
         prompt = self._create_name_prompt(theme, role, name_type)
         
-        try:
-            response = self.llm.generate_response(prompt)
-            name = self._parse_name_response(response, name_type)
-            return name
-            
-        except Exception as e:
-            if self.fallback_mode:
-                return self._generate_fallback_name(theme, role, name_type)
-            else:
-                raise RuntimeError(f"LLM name generation failed and fallback mode disabled: {e}")
+        # Retry logic for better name generation
+        max_retries = 3
+        for attempt in range(max_retries):
+            try:
+                response = self.llm.generate_response(prompt)
+                name = self._parse_name_response(response, name_type)
+                if name:  # Valid name generated
+                    return name
+                # If empty name, continue to next attempt
+            except Exception as e:
+                if attempt == max_retries - 1:  # Last attempt
+                    if self.fallback_mode:
+                        return self._generate_fallback_name(theme, role, name_type)
+                    else:
+                        raise RuntimeError(f"LLM name generation failed and fallback mode disabled: {e}")
+        
+        # All attempts failed, use fallback
+        if self.fallback_mode:
+            return self._generate_fallback_name(theme, role, name_type)
+        else:
+            raise RuntimeError("LLM name generation failed after multiple attempts and fallback mode disabled")
     
     def generate_item_name(self, item_type: str, theme: str, rarity: str = "common") -> str:
         """
@@ -86,15 +97,26 @@ Cyberpunk scroll: "Code Fragment", "Data Shard"
 
 Generate just the name, nothing else:"""
 
-        try:
-            response = self.llm.generate_response(prompt)
-            return response.strip().strip('"').strip("'")
-            
-        except Exception as e:
-            if self.fallback_mode:
-                return self._generate_fallback_item(item_type, theme, rarity)
-            else:
-                raise RuntimeError(f"LLM item name generation failed and fallback mode disabled: {e}")
+        max_retries = 3
+        for attempt in range(max_retries):
+            try:
+                response = self.llm.generate_response(prompt)
+                name = response.strip().strip('"').strip("'")
+                if name:  # Valid name generated
+                    return name
+                # If empty name, continue to next attempt
+            except Exception as e:
+                if attempt == max_retries - 1:  # Last attempt
+                    if self.fallback_mode:
+                        return self._generate_fallback_item(item_type, theme, rarity)
+                    else:
+                        raise RuntimeError(f"LLM item name generation failed and fallback mode disabled: {e}")
+        
+        # All attempts failed, use fallback
+        if self.fallback_mode:
+            return self._generate_fallback_item(item_type, theme, rarity)
+        else:
+            raise RuntimeError("LLM item name generation failed after multiple attempts and fallback mode disabled")
     
     def generate_location_name(self, location_type: str, theme: str) -> str:
         """
@@ -201,7 +223,17 @@ Generate just the title, nothing else:"""
         
         # Remove any extra text that might have been added
         lines = name.split('\n')
-        name = lines[0].strip()
+        # Safely get first non-empty line
+        name = ""
+        for line in lines:
+            clean_line = line.strip()
+            if clean_line:
+                name = clean_line
+                break
+        
+        # If no valid line found, return empty (will trigger retry)
+        if not name:
+            return ""
         
         # Remove common prefixes the LLM might add
         prefixes_to_remove = ["Name:", "Generated name:", "Character:", "Full name:"]
