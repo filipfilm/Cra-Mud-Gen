@@ -5,6 +5,7 @@ Uses LLM to generate room contents, NPCs, and items on-the-fly
 import random
 import re
 from typing import List, Dict, Any, Optional, Tuple
+from core.name_generator import NameGenerator
 
 
 class DynamicContentGenerator:
@@ -14,6 +15,7 @@ class DynamicContentGenerator:
         self.llm = llm
         self.generated_items = {}  # Cache for consistency
         self.generated_npcs = {}   # Cache for NPC personalities
+        self.name_generator = NameGenerator()
     
     def generate_room_contents(self, room_description: str, theme: str, depth: int, narrative_context: Dict = None) -> Dict[str, Any]:
         """Generate items and NPCs for a room using LLM with optional narrative context"""
@@ -194,26 +196,35 @@ NPC_PROFILES:
         for item in content["items"]:
             content["item_descriptions"][item] = f"A {item} that looks useful for your adventure."
         
-        # Occasional NPC
+        # Occasional NPC - now dynamically generated
         if random.random() < 0.3:
-            theme_npcs = {
-                "fantasy": [("Guard Captain", "warrior"), ("Wise Sage", "scholar"), ("Traveling Merchant", "trader")],
-                "sci-fi": [("Security Officer", "guard"), ("Tech Specialist", "engineer")],
-                "horror": [("Mad Survivor", "survivor"), ("Cultist", "fanatic")],
-                "cyberpunk": [("Data Broker", "hacker"), ("Corp Security", "guard")]
+            # Define roles by theme
+            theme_roles = {
+                "fantasy": ["warrior", "guard", "scholar", "trader", "priest", "healer", "blacksmith", "wizard"],
+                "sci-fi": ["guard", "engineer", "scientist", "pilot", "medic", "hacker", "operative"],
+                "horror": ["survivor", "cultist", "priest", "doctor", "scholar"],
+                "cyberpunk": ["hacker", "guard", "executive", "engineer", "runner", "operative"]
             }
             
-            npcs = theme_npcs.get(theme, theme_npcs["fantasy"])
-            if npcs:
-                npc_name, npc_role = random.choice(npcs)
-                content["npcs"] = [{"name": npc_name, "role": npc_role}]
-                content["npc_dialogues"][npc_name] = {
-                    "personality_traits": ["helpful", "experienced", "cautious"],
-                    "speech_pattern": "normal",
-                    "background": f"A {npc_role} who knows these lands well.",
-                    "greeting": f"*nods* Greetings, traveler.",
-                    "farewell": "May your path be safe, traveler."
-                }
+            roles = theme_roles.get(theme, theme_roles["fantasy"])
+            npc_role = random.choice(roles)
+            
+            # Generate dynamic name
+            npc_name = self.name_generator.generate_npc_name(theme, npc_role)
+            
+            content["npcs"] = [{"name": npc_name, "role": npc_role}]
+            
+            # Generate dynamic personality traits
+            personality_traits = self._generate_personality_traits(theme, npc_role)
+            speech_pattern = self._get_speech_pattern(theme, npc_role)
+            
+            content["npc_dialogues"][npc_name] = {
+                "personality_traits": personality_traits,
+                "speech_pattern": speech_pattern,
+                "background": f"A {npc_role} who has made these {self._get_area_descriptor(theme)} their domain.",
+                "greeting": self._generate_dynamic_greeting(npc_name, npc_role, theme),
+                "farewell": self._generate_dynamic_farewell(npc_role, theme)
+            }
         
         return content
     
@@ -334,3 +345,189 @@ Make them feel authentic to their role and the {theme} theme.{context_addition}"
             },
             "personality": "helpful"
         }
+    
+    def _generate_personality_traits(self, theme: str, role: str) -> List[str]:
+        """Generate dynamic personality traits based on theme and role"""
+        base_traits = {
+            "fantasy": {
+                "warrior": ["brave", "honorable", "protective", "disciplined"],
+                "guard": ["vigilant", "duty-bound", "suspicious", "loyal"],
+                "scholar": ["wise", "curious", "methodical", "patient"],
+                "trader": ["shrewd", "friendly", "opportunistic", "traveled"],
+                "priest": ["devout", "compassionate", "wise", "solemn"],
+                "healer": ["caring", "gentle", "knowledgeable", "empathetic"],
+                "blacksmith": ["skilled", "honest", "hardworking", "gruff"],
+                "wizard": ["mysterious", "powerful", "eccentric", "learned"]
+            },
+            "sci-fi": {
+                "guard": ["alert", "professional", "trained", "suspicious"],
+                "engineer": ["technical", "precise", "innovative", "logical"],
+                "scientist": ["analytical", "curious", "methodical", "intellectual"],
+                "pilot": ["confident", "skilled", "adventurous", "quick-thinking"],
+                "medic": ["caring", "precise", "calm", "knowledgeable"],
+                "hacker": ["clever", "rebellious", "secretive", "tech-savvy"],
+                "operative": ["stealthy", "professional", "cautious", "trained"]
+            },
+            "horror": {
+                "survivor": ["traumatized", "cautious", "resilient", "paranoid"],
+                "cultist": ["fanatical", "secretive", "unhinged", "devoted"],
+                "priest": ["fearful", "faithful", "protective", "haunted"],
+                "doctor": ["knowledgeable", "disturbed", "obsessive", "clinical"],
+                "scholar": ["obsessed", "knowledgeable", "reclusive", "haunted"]
+            },
+            "cyberpunk": {
+                "hacker": ["rebellious", "tech-savvy", "paranoid", "clever"],
+                "guard": ["corporate", "professional", "suspicious", "armed"],
+                "executive": ["ambitious", "ruthless", "polished", "calculating"],
+                "engineer": ["technical", "innovative", "underground", "skilled"],
+                "runner": ["fast", "streetwise", "independent", "risky"],
+                "operative": ["professional", "discrete", "dangerous", "connected"]
+            }
+        }
+        
+        role_traits = base_traits.get(theme, base_traits["fantasy"]).get(role, ["experienced", "cautious", "helpful"])
+        
+        # Add some randomness - pick 3-4 traits from the pool
+        selected_traits = random.sample(role_traits, min(len(role_traits), random.randint(3, 4)))
+        
+        # Occasionally add a contrasting trait for depth
+        if random.random() < 0.3:
+            contrasting_traits = ["quirky", "secretive", "humorous", "melancholy", "optimistic", "cynical"]
+            selected_traits.append(random.choice(contrasting_traits))
+        
+        return selected_traits
+    
+    def _get_speech_pattern(self, theme: str, role: str) -> str:
+        """Get speech pattern for NPC based on theme and role"""
+        speech_patterns = {
+            "fantasy": {
+                "warrior": "honorable",
+                "guard": "formal",
+                "scholar": "eloquent",
+                "trader": "friendly",
+                "priest": "solemn",
+                "healer": "gentle",
+                "blacksmith": "gruff",
+                "wizard": "mystical"
+            },
+            "sci-fi": {
+                "guard": "military",
+                "engineer": "technical",
+                "scientist": "analytical",
+                "pilot": "casual",
+                "medic": "professional",
+                "hacker": "slang",
+                "operative": "clipped"
+            },
+            "horror": {
+                "survivor": "nervous",
+                "cultist": "fanatical",
+                "priest": "fearful",
+                "doctor": "clinical",
+                "scholar": "obsessive"
+            },
+            "cyberpunk": {
+                "hacker": "street",
+                "guard": "corporate",
+                "executive": "polished",
+                "engineer": "technical",
+                "runner": "fast",
+                "operative": "professional"
+            }
+        }
+        
+        return speech_patterns.get(theme, speech_patterns["fantasy"]).get(role, "normal")
+    
+    def _get_area_descriptor(self, theme: str) -> str:
+        """Get area descriptor for NPC background"""
+        descriptors = {
+            "fantasy": "ancient halls",
+            "sci-fi": "technological corridors",
+            "horror": "cursed chambers", 
+            "cyberpunk": "neon-lit passages"
+        }
+        return descriptors.get(theme, "mysterious passages")
+    
+    def _generate_dynamic_greeting(self, name: str, role: str, theme: str) -> str:
+        """Generate dynamic greeting based on NPC characteristics"""
+        greeting_templates = {
+            "fantasy": {
+                "warrior": ["*straightens armor* Well met, traveler!", "*nods respectfully* Greetings, wanderer.", "*salutes* Hail and well met!"],
+                "guard": ["*eyes you warily* State your business here.", "*stands at attention* What brings you to these halls?", "Halt! Who goes there?"],
+                "scholar": ["*looks up from studies* Ah, a visitor! How fascinating.", "*adjusts spectacles* Welcome, seeker of knowledge.", "*marks place in tome* Greetings, traveler."],
+                "trader": ["*rubs hands together* Ah, a customer! Welcome!", "*smiles broadly* Come, come! See what wares I have!", "*waves enthusiastically* Greetings, friend! Looking to trade?"],
+                "priest": ["*bows head* May the light guide you, child.", "*makes sacred gesture* Blessings upon you, traveler.", "*speaks softly* Peace be with you, wanderer."],
+                "healer": ["*looks up with kind eyes* Are you injured, traveler?", "*speaks gently* Welcome, child. How may I aid you?", "*offers warm smile* Greetings. Do you need tending?"],
+                "blacksmith": ["*wipes sweat from brow* What can I forge for you?", "*looks up from anvil* Need weapons or repairs?", "*grunts* You look like you need better gear."],
+                "wizard": ["*looks up from spell components* Ah, the currents brought you here.", "*waves staff mysteriously* The arcane whispers of your arrival.", "*eyes glow briefly* Magic draws you here, I sense."]
+            },
+            "sci-fi": {
+                "guard": ["*checks scanner* Identification, please.", "*hand on weapon* Access authorized?", "*speaks into comm* We have a visitor."],
+                "engineer": ["*looks up from console* System malfunction?", "*adjusts goggles* Technical assistance needed?", "*powers down tool* What's the problem?"],
+                "scientist": ["*pauses experiment* Fascinating! A test subject!", "*makes notes* Interesting specimen.", "*scans you with device* Remarkable readings."],
+                "pilot": ["*leans back in chair* Going somewhere?", "*checks instruments* Need a ride?", "*grins* Another groundwalker, eh?"],
+                "medic": ["*medical scanner beeps* Any injuries to report?", "*checks medical kit* Need treatment?", "*professional tone* Medical assistance required?"],
+                "hacker": ["*doesn't look up from screens* What do you want?", "*types rapidly* Another corpo spy?", "*glances over* You're not supposed to be here."],
+                "operative": ["*emerges from shadows* You're being watched.", "*speaks quietly* We need to talk.", "*checks surroundings* This isn't secure."]
+            },
+            "horror": {
+                "survivor": ["*jumps at your approach* Oh! Another living soul!", "*clutches makeshift weapon* Are... are you real?", "*whispers* Please tell me you're not one of them."],
+                "cultist": ["*eyes gleam with madness* The darkness calls to you too!", "*chants softly* Join us in eternal shadow.", "*grins unsettlingly* The old ones have sent you."],
+                "priest": ["*holds holy symbol* May God protect us both.", "*prays quietly* The Lord tests us here.", "*trembles* Evil walks these halls."],
+                "doctor": ["*blood on hands* Another patient for the procedure.", "*clinical tone* Symptoms present as expected.", "*disturbing smile* Time for your examination."],
+                "scholar": ["*surrounded by forbidden tomes* The knowledge! It calls!", "*eyes wide with obsession* Have you seen the texts?", "*mutters about ancient secrets* The truth is here somewhere."]
+            },
+            "cyberpunk": {
+                "hacker": ["*neon light reflects off screen* You lost, choom?", "*doesn't look away from code* Another tourist?", "*types aggressively* Corporate or street?"],
+                "guard": ["*corporate uniform pristine* Authorized personnel only.", "*checks tablet* Your credentials?", "*hand on shock baton* Move along, citizen."],
+                "executive": ["*expensive suit, cold smile* How can I exploit-- I mean, help you?", "*checks chrono* Make it quick.", "*calculates profit margins* What's your worth?"],
+                "engineer": ["*surrounded by tech* Another system crash?", "*works on implant* Upgrades or repairs?", "*sparks fly* Just give me a few more cycles."],
+                "runner": ["*checks alley entrance* Quick job or just passing through?", "*nervous energy* Got heat on your tail?", "*always moving* Time is money, choom."],
+                "operative": ["*from the shadows* You didn't see me here.", "*checks for surveillance* We're clean.", "*professional whisper* What's the contract?"]
+            }
+        }
+        
+        templates = greeting_templates.get(theme, greeting_templates["fantasy"]).get(role, ["Greetings, traveler."])
+        return random.choice(templates)
+    
+    def _generate_dynamic_farewell(self, role: str, theme: str) -> str:
+        """Generate dynamic farewell based on NPC characteristics"""
+        farewell_templates = {
+            "fantasy": {
+                "warrior": ["May your blade stay sharp!", "Fight with honor!", "Victory be yours!"],
+                "guard": ["Stay vigilant out there.", "Keep to the safe paths.", "Watch your back."],
+                "scholar": ["May knowledge light your path.", "Seek wisdom in all things.", "Learn well, traveler."],
+                "trader": ["Profitable ventures ahead!", "May fortune favor your trades!", "Come back with more coin!"],
+                "priest": ["Go with divine blessing.", "May the light protect you.", "Walk in sacred grace."],
+                "healer": ["Take care of yourself.", "May you stay healthy and whole.", "Healing be with you."],
+                "blacksmith": ["May your equipment serve you well.", "Good steel makes good adventures.", "Forge your own destiny."],
+                "wizard": ["May the arcane currents guide you.", "Magic follows in your wake.", "The mysteries await you."]
+            },
+            "sci-fi": {
+                "guard": ["Stay in authorized zones.", "Watch for security alerts.", "Keep your clearance current."],
+                "engineer": ["Systems optimal.", "All functions normal.", "May your tech not fail you."],
+                "scientist": ["Fascinating data ahead.", "Continue your research.", "The hypothesis holds."],
+                "pilot": ["Safe travels through the void.", "May your nav systems stay true.", "See you in the stars."],
+                "medic": ["Stay healthy out there.", "Medical bay is always open.", "Vital signs optimal."],
+                "hacker": ["Stay off the grid.", "Don't get traced.", "Keep your ICE cold."],
+                "operative": ["This conversation never happened.", "Stay in the shadows.", "Watch for surveillance."]
+            },
+            "horror": {
+                "survivor": ["Don't trust the shadows.", "They're always watching.", "Stay in the light!"],
+                "cultist": ["The darkness embraces you.", "Join us when you're ready.", "The old ones call."],
+                "priest": ["May God have mercy on your soul.", "Evil cannot triumph forever.", "Faith will protect you."],
+                "doctor": ["The procedure will continue.", "Symptoms are progressing nicely.", "See you on the table."],
+                "scholar": ["The forbidden knowledge awaits.", "Truth lies in the texts.", "The ancient wisdom calls."]
+            },
+            "cyberpunk": {
+                "hacker": ["Keep it digital, choom.", "Don't get flatlined.", "Data is freedom."],
+                "guard": ["Move along, citizen.", "Corporate interests protected.", "Comply with regulations."],
+                "executive": ["Profit margins maintained.", "Shareholder value preserved.", "The market decides all."],
+                "engineer": ["May your chrome stay shiny.", "Upgrades available 24/7.", "Technology serves."],
+                "runner": ["Fast data, faster legs.", "The street remembers.", "Keep running, never stop."],
+                "operative": ["The job is never done.", "Trust no one.", "Information is ammunition."]
+            }
+        }
+        
+        templates = farewell_templates.get(theme, farewell_templates["fantasy"]).get(role, ["Safe travels."])
+        return random.choice(templates)
