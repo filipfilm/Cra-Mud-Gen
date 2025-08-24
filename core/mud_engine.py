@@ -30,21 +30,26 @@ class GameEngine:
     Main game engine that manages the game loop, state, and interactions
     """
     
-    def __init__(self, story_seed: Optional[StorySeed] = None):
+    def __init__(self, story_seed: Optional[StorySeed] = None, llm_interface=None, fallback_mode=False):
         self.context_manager = ContextManager()  # Initialize context manager first
         self.player = Player()
-        self.ui = TerminalUI()
+        self.ui = TerminalUI(fallback_mode=fallback_mode)
         self.combat_ui = CombatUI()
+        self.fallback_mode = fallback_mode
         
-        # Model selection first
-        selected_model = self._select_model()
-        self.llm = LLMIntegrationLayer(model_name=selected_model)  # Initialize LLM with selected model
+        # Use provided LLM interface or create new one
+        if llm_interface:
+            self.llm = llm_interface
+        else:
+            # Fallback to old behavior for backward compatibility
+            selected_model = self._select_model()
+            self.llm = LLMIntegrationLayer(model_name=selected_model)
         
-        self.world = World(self.context_manager, self.llm.llm)  # Pass LLM to world for ASCII art
+        self.world = World(self.context_manager, self.llm.llm, fallback_mode=fallback_mode)  # Pass LLM to world for ASCII art
         self.command_processor = CommandProcessor()
         self.combat_system = CombatSystem()
-        self.conversation_system = ConversationSystem(self.world, self.llm.llm)  # Pass world and LLM
-        self.story_engine = StoryEngine(self.llm.llm)
+        self.conversation_system = ConversationSystem(self.world, self.llm.llm, fallback_mode=fallback_mode)  # Pass world and LLM
+        self.story_engine = StoryEngine(self.llm.llm, fallback_mode=fallback_mode)
         self.choice_processor = ChoiceProcessor(self.story_engine, self.llm.llm)
         self.map_system = MapSystem()  # Initialize mapping system
         self.save_system = SaveSystem()  # Initialize save system
@@ -161,8 +166,14 @@ class GameEngine:
         """
         self.ui.display_welcome()
         
-        # Select theme
-        theme = self.ui.get_theme_selection()
+        # Use theme from story seed if available
+        if self.story_seed and self.story_seed.theme:
+            theme = self.story_seed.theme
+            print(f"🎨 Using theme from story seed: {theme.title()}")
+        else:
+            # Fallback to manual selection if no story seed theme
+            theme = self.ui.get_theme_selection()
+        
         self.player.theme = theme
         self.world.theme = theme
         

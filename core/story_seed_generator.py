@@ -227,7 +227,7 @@ class StorySeedGenerator:
             seed = self._iterate_seed_with_llm(seed)
         else:
             # Fallback: populate with template data
-            seed = self._populate_seed_from_theme(seed, detected_theme)
+            seed = self._populate_seed_from_theme_dynamically(seed, detected_theme)
         
         return seed
     
@@ -255,7 +255,7 @@ class StorySeedGenerator:
         )
         
         # Populate with theme-based content
-        seed = self._populate_seed_from_theme(seed, theme)
+        seed = self._populate_seed_from_theme_dynamically(seed, theme)
         
         # Add some randomization
         seed.custom_text = f"Random {theme} adventure with dynamic elements"
@@ -304,6 +304,81 @@ class StorySeedGenerator:
         
         return seed
     
+    def _populate_seed_from_theme_dynamically(self, seed: StorySeed, theme: str) -> StorySeed:
+        """
+        Populate a seed with dynamically generated theme-based content using GenerativeNameEngine
+        
+        Args:
+            seed: The StorySeed to populate
+            theme: The theme to use
+            
+        Returns:
+            Updated StorySeed
+        """
+        # Import LLMNameEngine locally to avoid circular imports
+        from core.llm_name_engine import LLMNameEngine
+        name_engine = LLMNameEngine(llm=self.llm_interface.llm if self.llm_interface else None, fallback_mode=True)
+        
+        # Generate dynamic setting (location name)
+        seed.setting = name_engine.generate_location_name("dungeon", theme)
+        
+        # Generate dynamic conflict
+        conflict_types = {
+            "fantasy": ["curse", "threat", "siege", "hunt"],
+            "sci-fi": ["invasion", "malfunction", "conspiracy", "rebellion"],
+            "horror": ["presence", "terror", "evil", "nightmare"],
+            "cyberpunk": ["espionage", "theft", "uprising", "crisis"]
+        }
+        conflict_type = random.choice(conflict_types.get(theme, conflict_types["fantasy"]))
+        
+        # Create more dynamic conflict descriptions
+        if theme == "fantasy":
+            adjectives = ["ancient", "dark", "mysterious", "forgotten"]
+            entities = ["sorcerer", "curse", "evil", "artifact"]
+        elif theme == "sci-fi":
+            adjectives = ["alien", "system", "corporate", "AI"]
+            entities = ["invasion", "malfunction", "conspiracy", "rebellion"]
+        elif theme == "horror":
+            adjectives = ["supernatural", "ancient", "cursed", "nightmare"]
+            entities = ["presence", "evil", "terror", "entity"]
+        else:  # cyberpunk
+            adjectives = ["corporate", "data", "neural", "digital"]
+            entities = ["espionage", "theft", "uprising", "warfare"]
+        
+        adj = random.choice(adjectives)
+        entity = random.choice(entities)
+        seed.conflict = f"{adj} {entity} {conflict_type}"
+        
+        # Generate dynamic main character
+        character_roles = {
+            "fantasy": ["knight", "wizard", "rogue", "paladin", "ranger"],
+            "sci-fi": ["marine", "scientist", "engineer", "pilot", "explorer"],
+            "horror": ["investigator", "survivor", "medium", "hunter"],
+            "cyberpunk": ["hacker", "runner", "agent", "samurai", "operative"]
+        }
+        
+        role = random.choice(character_roles.get(theme, character_roles["fantasy"]))
+        character_name = name_engine.generate_dynamic_name(theme, role, "full")
+        seed.main_characters = [character_name]
+        
+        # Generate dynamic story beats
+        seed.story_beats = [
+            f"Introduction to {seed.setting}",
+            f"Discovery of {seed.conflict}",
+            "First challenge or obstacle",
+            "Character development or revelation",
+            "Climax and resolution"
+        ]
+        
+        # Generate plot hooks using dynamic content
+        seed.plot_hooks = [
+            f"Explore the mysteries of {seed.setting}",
+            f"Confront the {seed.conflict}",
+            f"Ally with or challenge {character_name}"
+        ]
+        
+        return seed
+    
     def _iterate_seed_with_llm(self, seed: StorySeed) -> StorySeed:
         """
         Use LLM to iterate and improve the story seed (1-3 iterations)
@@ -325,7 +400,7 @@ class StorySeedGenerator:
                 prompt = self._create_iteration_prompt(current_seed, iteration)
                 
                 # Get LLM response
-                response = self.llm_interface.generate_text(prompt, max_tokens=800)
+                response = self.llm_interface.llm.generate_response(prompt)
                 
                 # Parse response and update seed
                 current_seed = self._parse_llm_response(current_seed, response, iteration)

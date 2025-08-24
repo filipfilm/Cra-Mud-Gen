@@ -14,7 +14,7 @@ class ContextualEffects:
 
     @staticmethod
     def apply_room_effect(
-        room_description: str, theme: str, duration: float = 1.5, llm=None
+        room_description: str, theme: str, duration: float = 1.5, llm=None, fallback_mode=False
     ):
         """
         Apply visual effects based on room description keywords
@@ -27,7 +27,7 @@ class ContextualEffects:
             for word in ["pond", "lake", "water", "pool", "spring", "fountain"]
         ):
             message = ContextualEffects._generate_effect_message(
-                llm, "water", theme, room_description
+                llm, "water", theme, room_description, fallback_mode=fallback_mode
             )
             Effects.shimmer_pond(message, duration)
             return True
@@ -47,12 +47,12 @@ class ContextualEffects:
         ):
             if "lava" in description_lower or "molten" in description_lower:
                 message = ContextualEffects._generate_effect_message(
-                    llm, "lava", theme, room_description
+                    llm, "lava", theme, room_description, fallback_mode=fallback_mode
                 )
                 Effects.lava_flow(message, duration)
             else:
                 message = ContextualEffects._generate_effect_message(
-                    llm, "fire", theme, room_description
+                    llm, "fire", theme, room_description, fallback_mode=fallback_mode
                 )
                 Effects.burning_flame(message, duration)
             return True
@@ -71,7 +71,7 @@ class ContextualEffects:
             ]
         ):
             message = ContextualEffects._generate_effect_message(
-                llm, "magical", theme, room_description
+                llm, "magical", theme, room_description, fallback_mode=fallback_mode
             )
             Effects.crystal_sparkle(message, duration)
             return True
@@ -82,7 +82,7 @@ class ContextualEffects:
             for word in ["lightning", "storm", "electric", "spark", "energy", "power"]
         ):
             message = ContextualEffects._generate_effect_message(
-                llm, "lightning", theme, room_description
+                llm, "lightning", theme, room_description, fallback_mode=fallback_mode
             )
             Effects.lightning_strike(message, 2)
             return True
@@ -101,7 +101,7 @@ class ContextualEffects:
             ]
         ):
             message = ContextualEffects._generate_effect_message(
-                llm, "poison", theme, room_description
+                llm, "poison", theme, room_description, fallback_mode=fallback_mode
             )
             Effects.toxic_bubble(message, duration)
             return True
@@ -120,7 +120,7 @@ class ContextualEffects:
             ]
         ):
             message = ContextualEffects._generate_effect_message(
-                llm, "shadow", theme, room_description
+                llm, "shadow", theme, room_description, fallback_mode=fallback_mode
             )
             Effects.void_corruption(message, duration)
             return True
@@ -131,7 +131,7 @@ class ContextualEffects:
             for word in ["snow", "ice", "frost", "frozen", "cold", "winter", "blizzard"]
         ):
             message = ContextualEffects._generate_effect_message(
-                llm, "ice", theme, room_description
+                llm, "ice", theme, room_description, fallback_mode=fallback_mode
             )
             Effects.snow_fall(message, duration)
             return True
@@ -142,7 +142,7 @@ class ContextualEffects:
             for word in ["smoke", "mist", "fog", "haze", "vapor", "steam"]
         ):
             message = ContextualEffects._generate_effect_message(
-                llm, "smoke", theme, room_description
+                llm, "smoke", theme, room_description, fallback_mode=fallback_mode
             )
             Effects.smoke_drift(message, duration)
             return True
@@ -160,7 +160,7 @@ class ContextualEffects:
             ]
         ):
             message = ContextualEffects._generate_effect_message(
-                llm, "aurora", theme, room_description
+                llm, "aurora", theme, room_description, fallback_mode=fallback_mode
             )
             Effects.aurora_dance(message, duration)
             return True
@@ -177,12 +177,14 @@ class ContextualEffects:
 
     @staticmethod
     def _generate_effect_message(
-        llm, effect_type: str, theme: str, context: str
+        llm, effect_type: str, theme: str, context: str, fallback_mode: bool = False
     ) -> str:
         """
         Generate dynamic effect message using LLM
         """
         if not llm:
+            if not fallback_mode:
+                raise RuntimeError("LLM is required for contextual effects (fallback mode disabled)")
             # Fallback to simple dynamic messages if no LLM
             fallbacks = {
                 "water": [
@@ -281,7 +283,9 @@ Keep it evocative and thematic. Only return the formatted message."""
                 symbol = symbols.get(effect_type, "~")
                 cleaned = f"{symbol} {cleaned} {symbol}"
             return cleaned
-        except:
+        except Exception as e:
+            if not fallback_mode:
+                raise RuntimeError(f"LLM contextual effect generation failed and fallback mode disabled: {e}")
             # Fallback if LLM fails
             fallbacks = {
                 "water": "~ Water ripples softly ~",
@@ -299,7 +303,7 @@ Keep it evocative and thematic. Only return the formatted message."""
 
     @staticmethod
     def apply_item_effect(
-        item_name: str, theme: str, action: str = "examine", llm=None
+        item_name: str, theme: str, action: str = "examine", llm=None, fallback_mode: bool = False
     ):
         """
         Apply effects based on item examination or interaction
@@ -313,22 +317,22 @@ Keep it evocative and thematic. Only return the formatted message."""
         ):
             if theme == "fantasy":
                 message = ContextualEffects._generate_item_effect_message(
-                    llm, "legendary", item_name, theme
+                    llm, "legendary", item_name, theme, fallback_mode=fallback_mode
                 )
                 Effects.crystal_sparkle(message, 2.5)
             elif theme == "sci-fi":
                 message = ContextualEffects._generate_item_effect_message(
-                    llm, "legendary", item_name, theme
+                    llm, "legendary", item_name, theme, fallback_mode=fallback_mode
                 )
                 Effects.electric_storm(message, 2.0)
             elif theme == "horror":
                 message = ContextualEffects._generate_item_effect_message(
-                    llm, "legendary", item_name, theme
+                    llm, "legendary", item_name, theme, fallback_mode=fallback_mode
                 )
                 Effects.void_corruption(message, 2.0)
             elif theme == "cyberpunk":
                 message = ContextualEffects._generate_item_effect_message(
-                    llm, "legendary", item_name, theme
+                    llm, "legendary", item_name, theme, fallback_mode=fallback_mode
                 )
                 Effects.matrix_rain(message, 2.0)
             return True
@@ -339,7 +343,7 @@ Keep it evocative and thematic. Only return the formatted message."""
             for word in ["flame", "fire", "burning", "torch", "ember"]
         ):
             message = ContextualEffects._generate_item_effect_message(
-                llm, "fire", item_name, theme
+                llm, "fire", item_name, theme, fallback_mode=fallback_mode
             )
             Effects.burning_flame(message, 2.0)
             return True
@@ -350,7 +354,7 @@ Keep it evocative and thematic. Only return the formatted message."""
             for word in ["crystal", "gem", "magical", "enchanted", "glowing"]
         ):
             message = ContextualEffects._generate_item_effect_message(
-                llm, "magical", item_name, theme
+                llm, "magical", item_name, theme, fallback_mode=fallback_mode
             )
             Effects.crystal_sparkle(message, 2.0)
             return True
@@ -361,7 +365,7 @@ Keep it evocative and thematic. Only return the formatted message."""
             for word in ["electric", "plasma", "energy", "quantum", "neural"]
         ):
             message = ContextualEffects._generate_item_effect_message(
-                llm, "electric", item_name, theme
+                llm, "electric", item_name, theme, fallback_mode=fallback_mode
             )
             Effects.electric_storm(message, 1.5)
             return True
@@ -372,7 +376,7 @@ Keep it evocative and thematic. Only return the formatted message."""
             for word in ["cursed", "dark", "shadow", "void", "nightmare"]
         ):
             message = ContextualEffects._generate_item_effect_message(
-                llm, "cursed", item_name, theme
+                llm, "cursed", item_name, theme, fallback_mode=fallback_mode
             )
             Effects.void_corruption(message, 2.0)
             return True
@@ -381,10 +385,12 @@ Keep it evocative and thematic. Only return the formatted message."""
 
     @staticmethod
     def _generate_item_effect_message(
-        llm, effect_type: str, item_name: str, theme: str
+        llm, effect_type: str, item_name: str, theme: str, fallback_mode: bool = False
     ) -> str:
         """Generate dynamic item effect message using LLM"""
         if not llm:
+            if not fallback_mode:
+                raise RuntimeError("LLM is required for item effects (fallback mode disabled)")
             templates = {
                 "legendary": f"✧ The {item_name} radiates power ✧",
                 "fire": f"≈ The {item_name} flickers with flame ≈",
@@ -406,7 +412,9 @@ Mention the item name. Only return the formatted message."""
 
             response = llm.generate_response(prompt)
             return response.strip()
-        except:
+        except Exception as e:
+            if not fallback_mode:
+                raise RuntimeError(f"LLM item effect generation failed and fallback mode disabled: {e}")
             templates = {
                 "legendary": f"✧ The {item_name} radiates ancient power ✧",
                 "fire": f"≈ The {item_name} flickers with inner flame ≈",

@@ -9,8 +9,9 @@ import random
 class SpatialNavigation:
     """Manages spatially aware movement between rooms"""
     
-    def __init__(self, llm=None):
+    def __init__(self, llm=None, fallback_mode=False):
         self.llm = llm
+        self.fallback_mode = fallback_mode
         self.room_environment_map = {}  # room_id -> environment type
         self.transition_templates = self._initialize_transition_templates()
         
@@ -78,7 +79,10 @@ class SpatialNavigation:
         if self.llm:
             return self._generate_llm_movement(from_env, to_env, direction, theme)
         else:
-            return self._generate_template_movement(from_env, to_env, direction)
+            if self.fallback_mode:
+                return self._generate_template_movement(from_env, to_env, direction)
+            else:
+                raise RuntimeError("LLM is required for spatial navigation (fallback mode disabled)")
     
     def _classify_environment(self, room_id: str, room_desc: str, theme: str) -> str:
         """Classify room environment type based on description and ID"""
@@ -155,10 +159,17 @@ Generate the movement description:"""
             response = self.llm.generate_response(prompt)
             if response and len(response.strip()) > 10:
                 return response.strip()
-        except:
-            pass
+        except Exception as e:
+            if self.fallback_mode:
+                return self._generate_template_movement(from_env, to_env, direction)
+            else:
+                raise RuntimeError(f"LLM movement description generation failed and fallback mode disabled: {e}")
         
-        return self._generate_template_movement(from_env, to_env, direction)
+        # If LLM response was too short, fallback or error
+        if self.fallback_mode:
+            return self._generate_template_movement(from_env, to_env, direction)
+        else:
+            raise RuntimeError("LLM generated insufficient movement description and fallback mode disabled")
     
     def _generate_template_movement(self, from_env: str, to_env: str, direction: str) -> str:
         """Generate movement description using templates"""

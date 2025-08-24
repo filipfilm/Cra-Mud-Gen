@@ -33,12 +33,13 @@ class NPCPersonality:
 class ConversationSystem:
     """Manages NPC conversations and dialogue"""
     
-    def __init__(self, world=None, llm=None):
+    def __init__(self, world=None, llm=None, fallback_mode=False):
         self.context = ConversationContext()
         self.npcs = self._initialize_npcs()
         self.conversation_patterns = self._initialize_patterns()
         self.world = world  # Reference to world for dynamic NPCs
         self.llm = llm  # LLM for character embodiment
+        self.fallback_mode = fallback_mode
     
     def _initialize_npcs(self) -> Dict[str, NPCPersonality]:
         """Initialize NPC personalities and dialogue"""
@@ -280,9 +281,16 @@ class ConversationSystem:
                 return self._generate_llm_character_response(npc, player_input)
             except Exception as e:
                 print(f"LLM character response failed: {e}")
+                if self.fallback_mode:
+                    return self._generate_fallback_response(npc, player_input)
+                else:
+                    raise RuntimeError(f"LLM character response failed and fallback mode disabled: {e}")
         
-        # Fallback to topic-based or contextual response
-        return self._generate_fallback_response(npc, player_input)
+        # If LLM not available
+        if self.fallback_mode:
+            return self._generate_fallback_response(npc, player_input)
+        else:
+            raise RuntimeError("LLM is required for character responses (fallback mode disabled)")
     
     def _generate_llm_character_response(self, npc: NPCPersonality, player_input: str) -> str:
         """Generate response using LLM with character embodiment"""

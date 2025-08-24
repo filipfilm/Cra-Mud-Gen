@@ -5,22 +5,26 @@ Uses LLM to generate room contents, NPCs, and items on-the-fly
 import random
 import re
 from typing import List, Dict, Any, Optional, Tuple
-from core.name_generator import NameGenerator
+from core.llm_name_engine import LLMNameEngine
 
 
 class DynamicContentGenerator:
     """Generates dynamic room content using LLM"""
     
-    def __init__(self, llm=None):
+    def __init__(self, llm=None, fallback_mode=False):
         self.llm = llm
         self.generated_items = {}  # Cache for consistency
         self.generated_npcs = {}   # Cache for NPC personalities
-        self.name_generator = NameGenerator()
+        self.name_generator = LLMNameEngine(llm=llm, fallback_mode=fallback_mode)
+        self.fallback_mode = fallback_mode
     
     def generate_room_contents(self, room_description: str, theme: str, depth: int, narrative_context: Dict = None) -> Dict[str, Any]:
         """Generate items and NPCs for a room using LLM with optional narrative context"""
         if not self.llm:
-            return self._fallback_generation(room_description, theme, depth, narrative_context)
+            if self.fallback_mode:
+                return self._fallback_generation(room_description, theme, depth, narrative_context)
+            else:
+                raise RuntimeError("LLM is required for room content generation (fallback mode disabled)")
         
         # Create LLM prompt for room contents
         prompt = self._create_content_prompt(room_description, theme, depth, narrative_context)
@@ -30,7 +34,10 @@ class DynamicContentGenerator:
             return self._parse_llm_response(response, theme)
         except Exception as e:
             print(f"LLM generation failed: {e}")
-            return self._fallback_generation(room_description, theme, depth, narrative_context)
+            if self.fallback_mode:
+                return self._fallback_generation(room_description, theme, depth, narrative_context)
+            else:
+                raise RuntimeError(f"LLM generation failed and fallback mode disabled: {e}")
     
     def _create_content_prompt(self, room_description: str, theme: str, depth: int, narrative_context: Dict = None) -> str:
         """Create prompt for LLM room content generation with narrative context"""
@@ -180,17 +187,24 @@ NPC_PROFILES:
             "npc_dialogues": {}
         }
         
-        # Simple item generation
-        theme_items = {
-            "fantasy": ["sword", "shield", "potion", "scroll", "gem", "coin purse", "torch", "dagger"],
-            "sci-fi": ["data pad", "energy cell", "laser pistol", "scanner", "med kit", "oxygen tank"],
-            "horror": ["old key", "torn journal", "candle", "cursed amulet", "bone fragment"],
-            "cyberpunk": ["credit chip", "neural interface", "holo-display", "encrypted drive"]
+        # Generate dynamic items
+        item_types = {
+            "fantasy": ["weapon", "armor", "potion", "scroll"],
+            "sci-fi": ["tech", "weapon", "armor", "consumable"],
+            "horror": ["artifact", "weapon", "consumable"],
+            "cyberpunk": ["tech", "software", "weapon"]
         }
         
-        items = theme_items.get(theme, theme_items["fantasy"])
+        available_types = item_types.get(theme, item_types["fantasy"])
         num_items = min(4, max(1, depth // 3 + random.randint(0, 2)))
-        content["items"] = random.sample(items, min(num_items, len(items)))
+        
+        # Generate unique item names
+        content["items"] = []
+        for _ in range(num_items):
+            item_type = random.choice(available_types)
+            rarity = "common" if depth < 5 else "uncommon" if depth < 10 else "rare"
+            item_name = self.name_generator.generate_item_name(item_type, theme, rarity)
+            content["items"].append(item_name)
         
         # Simple descriptions
         for item in content["items"]:
@@ -210,7 +224,7 @@ NPC_PROFILES:
             npc_role = random.choice(roles)
             
             # Generate dynamic name
-            npc_name = self.name_generator.generate_npc_name(theme, npc_role)
+            npc_name = self.name_generator.generate_dynamic_name(theme, npc_role, "full")
             
             content["npcs"] = [{"name": npc_name, "role": npc_role}]
             
@@ -234,7 +248,10 @@ NPC_PROFILES:
             return self.generated_items[item_name]
         
         if not self.llm:
-            return f"A {item_name} that could be useful on your adventure."
+            if self.fallback_mode:
+                return f"A {item_name} that could be useful on your adventure."
+            else:
+                raise RuntimeError("LLM is required for item descriptions (fallback mode disabled)")
         
         prompt = f"""Describe this {theme} item in detail: {item_name}
 
@@ -249,10 +266,13 @@ Keep it immersive and thematic for {theme} setting."""
             description = self.llm.generate_response(prompt)
             self.generated_items[item_name] = description.strip()
             return description.strip()
-        except:
-            fallback = f"A {item_name} that appears to be of {theme} origin, well-crafted and potentially valuable."
-            self.generated_items[item_name] = fallback
-            return fallback
+        except Exception as e:
+            if self.fallback_mode:
+                fallback = f"A {item_name} that appears to be of {theme} origin, well-crafted and potentially valuable."
+                self.generated_items[item_name] = fallback
+                return fallback
+            else:
+                raise RuntimeError(f"LLM item description failed and fallback mode disabled: {e}")
     
     def create_dynamic_npc_conversation(self, npc_name: str, npc_role: str, theme: str, narrative_context: Dict = None) -> Dict[str, Any]:
         """Create a conversation personality for a dynamically generated NPC"""
@@ -260,7 +280,10 @@ Keep it immersive and thematic for {theme} setting."""
             return self.generated_npcs[npc_name]
         
         if not self.llm:
-            return self._fallback_npc_personality(npc_name, npc_role, theme)
+            if self.fallback_mode:
+                return self._fallback_npc_personality(npc_name, npc_role, theme)
+            else:
+                raise RuntimeError("LLM is required for NPC conversation creation (fallback mode disabled)")
         
         # Add narrative context for NPC personality
         narrative_info = ""
@@ -304,8 +327,11 @@ Make them feel authentic to their role and the {theme} theme.{context_addition}"
             personality = self._parse_npc_personality(response)
             self.generated_npcs[npc_name] = personality
             return personality
-        except:
-            return self._fallback_npc_personality(npc_name, npc_role, theme)
+        except Exception as e:
+            if self.fallback_mode:
+                return self._fallback_npc_personality(npc_name, npc_role, theme)
+            else:
+                raise RuntimeError(f"LLM NPC conversation creation failed and fallback mode disabled: {e}")
     
     def _parse_npc_personality(self, response: str) -> Dict[str, Any]:
         """Parse LLM response into NPC personality"""

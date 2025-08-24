@@ -34,10 +34,11 @@ class Colors:
 class SeedUI:
     """Terminal-based user interface for story seed generation"""
     
-    def __init__(self):
+    def __init__(self, llm_interface=None, fallback_mode=False):
         """Initialize the UI system"""
-        self.generator = StorySeedGenerator()
+        self.generator = StorySeedGenerator(llm_interface=llm_interface)
         self.current_seed = None
+        self.fallback_mode = fallback_mode
     
     def clear_screen(self):
         """Clear the terminal screen"""

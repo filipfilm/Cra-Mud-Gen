@@ -20,16 +20,17 @@ class World:
     Represents the game world including dungeon layout and rooms
     """
     
-    def __init__(self, context_manager=None, llm=None):
+    def __init__(self, context_manager=None, llm=None, fallback_mode=False):
         self.rooms: Dict[str, Room] = {}
         self.theme = "fantasy"
         self.theme_manager = ThemeManager()
         self.enemy_spawner = EnemySpawner()
-        self.content_generator = DynamicContentGenerator(llm)
-        self.spatial_nav = SpatialNavigation(llm)
+        self.content_generator = DynamicContentGenerator(llm, fallback_mode=fallback_mode)
+        self.spatial_nav = SpatialNavigation(llm, fallback_mode=fallback_mode)
         self.dungeon_layout = []
         self.context_manager = context_manager
         self.llm = llm  # LLM instance for ASCII art generation
+        self.fallback_mode = fallback_mode
         
         # Narrative integration
         self.narrative_state = None
@@ -295,58 +296,70 @@ class World:
     def _get_room_items(self, room_type: str, theme: str) -> List[str]:
         """Get items appropriate for the room type"""
         
-        type_items = {
-            "chamber": ["ornate chest", "crystal orb", "ancient rune stone"],
-            "hallway": ["rusty key", "faded painting", "torch"],
-            "cavern": ["glowing mushroom", "precious gem", "cave moss"],
-            "tunnel": ["mining pick", "lantern", "rope"],
-            "library": ["ancient tome", "scroll of wisdom", "quill pen"],
-            "stairwell": ["brass key", "worn banner"],
-            "shrine": ["blessed amulet", "holy water", "prayer beads"],
-            "armory": ["steel sword", "leather armor", "iron shield"]
+        # OLD HARDCODED APPROACH REMOVED - NOW USING DYNAMIC GENERATION
+        
+        # REPLACED WITH DYNAMIC GENERATION - NO MORE HARDCODED ITEMS
+        # Import LLMNameEngine locally to avoid circular imports
+        from core.llm_name_engine import LLMNameEngine
+        name_engine = LLMNameEngine(llm=self.llm, fallback_mode=self.fallback_mode)
+        
+        # Determine item types based on room type
+        room_item_types = {
+            "chamber": ["weapon", "armor", "potion", "scroll"],
+            "hallway": ["weapon", "potion", "scroll"],
+            "cavern": ["potion", "weapon", "armor"],
+            "tunnel": ["weapon", "potion"],
+            "library": ["scroll", "potion"],
+            "stairwell": ["weapon", "scroll"],
+            "shrine": ["potion", "scroll", "armor"],
+            "armory": ["weapon", "armor"]
         }
         
-        # Get theme items
-        theme_items = self.theme_manager.get_theme_items(theme)
-        room_specific_items = type_items.get(room_type, [])
+        # Generate 0-2 items dynamically
+        dynamic_num_items = random.randint(0, 2)
+        dynamic_items = []
         
-        # Combine and randomly select
-        all_possible_items = theme_items + room_specific_items
-        num_items = random.randint(0, 2)
+        for _ in range(dynamic_num_items):
+            # Get appropriate item types for this room
+            possible_types = room_item_types.get(room_type, ["weapon", "armor", "potion", "scroll"])
+            item_type = random.choice(possible_types)
+            
+            # Determine rarity (mostly common, some uncommon)
+            rarity = "common" if random.random() < 0.8 else "uncommon"
+            
+            # Generate unique item name
+            item_name = name_engine.generate_item_name(item_type, theme, rarity)
+            dynamic_items.append(item_name)
         
-        if all_possible_items:
-            return random.sample(all_possible_items, min(num_items, len(all_possible_items)))
-        return []
+        return dynamic_items
     
     def _get_room_npcs(self, room_type: str, theme: str) -> List[str]:
-        """Get NPCs appropriate for the room type"""
+        """Generate dynamic NPCs appropriate for the room type using LLMNameEngine"""
         
-        type_npcs = {
-            "library": ["wise librarian", "scholar", "fortune teller"],
-            "shrine": ["holy priest", "temple guardian"],
-            "armory": ["weapons master", "guard", "blacksmith"],
-            "chamber": ["noble lord", "court wizard", "weapons master"],
-            "forge": ["weapons master", "blacksmith"],
-            "tent": ["fortune teller", "merchant"],
-            "workshop": ["weapons master", "craftsman"]
+        # Import LLMNameEngine locally to avoid circular imports
+        from core.llm_name_engine import LLMNameEngine
+        name_engine = LLMNameEngine(llm=self.llm, fallback_mode=self.fallback_mode)
+        
+        # Determine appropriate NPC roles based on room type
+        room_npc_roles = {
+            "library": ["sage", "scholar", "keeper"],
+            "shrine": ["priest", "guardian", "devotee"],
+            "armory": ["guard", "warrior", "smith"],
+            "chamber": ["noble", "mage", "advisor"],
+            "forge": ["smith", "craftsman"],
+            "tent": ["merchant", "traveler"],
+            "workshop": ["craftsman", "artisan"]
         }
         
-        # Higher chance for specific NPCs that we have conversation systems for
-        conversation_npcs = ["weapons master", "fortune teller"]
-        
-        theme_npcs = self.theme_manager.get_theme_npcs(theme) if hasattr(self.theme_manager, 'get_theme_npcs') else []
-        room_specific_npcs = type_npcs.get(room_type, [])
-        
-        # Increased chance of NPCs, especially conversation NPCs
-        if random.random() < 0.4:  # 40% chance of NPC
-            all_possible_npcs = theme_npcs + room_specific_npcs
+        # 40% chance of generating an NPC
+        if random.random() < 0.4:
+            # Get appropriate roles for this room type
+            possible_roles = room_npc_roles.get(room_type, ["guard", "wanderer", "keeper"])
+            npc_role = random.choice(possible_roles)
             
-            # Prefer conversation NPCs
-            available_conversation_npcs = [npc for npc in all_possible_npcs if npc in conversation_npcs]
-            if available_conversation_npcs and random.random() < 0.7:  # 70% chance to pick conversation NPC
-                return [random.choice(available_conversation_npcs)]
-            elif all_possible_npcs:
-                return [random.choice(all_possible_npcs)]
+            # Generate dynamic NPC name with role-appropriate title
+            npc_name = name_engine.generate_dynamic_name(theme, npc_role, "full")
+            return [npc_name]
         
         return []
         
@@ -558,7 +571,10 @@ class World:
         Generate ASCII art for room descriptions
         """
         if not self.llm or not hasattr(self.llm, 'generate_ascii_art'):
-            return self._fallback_room_ascii_art(room_type, theme)
+            if self.fallback_mode:
+                return self._fallback_room_ascii_art(room_type, theme)
+            else:
+                raise RuntimeError("LLM with ASCII art capability is required (fallback mode disabled)")
         
         try:
             # Create subjects based on room type and theme
@@ -583,7 +599,10 @@ class World:
             
         except Exception as e:
             print(f"Error generating room ASCII art: {e}")
-            return self._fallback_room_ascii_art(room_type, theme)
+            if self.fallback_mode:
+                return self._fallback_room_ascii_art(room_type, theme)
+            else:
+                raise RuntimeError(f"Room ASCII art generation failed and fallback mode disabled: {e}")
     
     def _fallback_room_ascii_art(self, room_type: str, theme: str) -> str:
         """
@@ -621,14 +640,20 @@ class World:
         Generate ASCII art for items (called when items are examined)
         """
         if not self.llm or not hasattr(self.llm, 'generate_ascii_art'):
-            return self._fallback_item_ascii_art(item_name, theme)
+            if self.fallback_mode:
+                return self._fallback_item_ascii_art(item_name, theme)
+            else:
+                raise RuntimeError("LLM with ASCII art capability is required for item art (fallback mode disabled)")
         
         try:
             # Generate object-type ASCII art for items
             return self.llm.generate_ascii_art(item_name, theme, "object")
         except Exception as e:
             print(f"Error generating item ASCII art: {e}")
-            return self._fallback_item_ascii_art(item_name, theme)
+            if self.fallback_mode:
+                return self._fallback_item_ascii_art(item_name, theme)
+            else:
+                raise RuntimeError(f"Item ASCII art generation failed and fallback mode disabled: {e}")
     
     def _fallback_item_ascii_art(self, item_name: str, theme: str) -> str:
         """

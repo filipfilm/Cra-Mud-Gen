@@ -12,8 +12,9 @@ class TerminalUI:
     Text-based user interface for Cra-mud-gen
     """
     
-    def __init__(self):
+    def __init__(self, fallback_mode=False):
         self.clear_command = "clear" if os.name != "nt" else "cls"
+        self.fallback_mode = fallback_mode
         
     def get_input(self) -> str:
         """
@@ -106,7 +107,7 @@ class TerminalUI:
         print(f"{Colors.BRIGHT_WHITE}{description}{Colors.RESET}")
         
         # Apply contextual visual effects based on room description
-        ContextualEffects.apply_room_effect(description, player.theme, 1.5, llm)
+        ContextualEffects.apply_room_effect(description, player.theme, 1.5, llm, fallback_mode=self.fallback_mode)
         
         # Show items with rarity colors
         items = room.get_items()
@@ -315,7 +316,7 @@ class TerminalUI:
         """
         print(result)
         # Apply item-specific visual effects
-        ContextualEffects.apply_item_effect(item_name, theme, "examine", llm)
+        ContextualEffects.apply_item_effect(item_name, theme, "examine", llm, fallback_mode=self.fallback_mode)
     
     def display_combat_event(self, event_type: str, theme: str, message: str = "", llm=None):
         """

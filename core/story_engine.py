@@ -57,8 +57,9 @@ class WorldEvent:
 class StoryEngine:
     """Manages dynamic story generation and player choice consequences"""
     
-    def __init__(self, llm=None):
+    def __init__(self, llm=None, fallback_mode=False):
         self.llm = llm
+        self.fallback_mode = fallback_mode
         self.story_threads: List[StoryThread] = []
         self.world_events: List[WorldEvent] = []
         self.player_history: Dict[str, Any] = {
@@ -79,7 +80,10 @@ class StoryEngine:
     def initialize_story_arc(self, theme: str, player_background: Optional[Dict] = None) -> StoryThread:
         """Generate initial overarching story arc"""
         if not self.llm:
-            return self._generate_fallback_story_arc(theme)
+            if self.fallback_mode:
+                return self._generate_fallback_story_arc(theme)
+            else:
+                raise RuntimeError("LLM is required for story arc generation (fallback mode disabled)")
         
         prompt = self._create_story_arc_prompt(theme, player_background)
         
@@ -88,7 +92,10 @@ class StoryEngine:
             return self._parse_story_arc_response(response, theme)
         except Exception as e:
             print(f"Story generation failed: {e}")
-            return self._generate_fallback_story_arc(theme)
+            if self.fallback_mode:
+                return self._generate_fallback_story_arc(theme)
+            else:
+                raise RuntimeError(f"Story arc generation failed and fallback mode disabled: {e}")
     
     def _create_story_arc_prompt(self, theme: str, background: Optional[Dict]) -> str:
         """Create prompt for main story arc generation"""
@@ -300,7 +307,10 @@ KEY_NPCS: Lyra the Last Mage (guide) | Darkborn Kael (rival) | Queen Morwyn (aut
     def _generate_choice_narrative(self, choice: str, context: Dict, consequences: List[Dict]) -> str:
         """Generate narrative response to player choice"""
         if not self.llm:
-            return f"You {choice.lower()}. The world shifts around your decision."
+            if self.fallback_mode:
+                return f"You {choice.lower()}. The world shifts around your decision."
+            else:
+                raise RuntimeError("LLM is required for choice narrative generation (fallback mode disabled)")
         
         prompt = f"""The player chose: "{choice}"
 
@@ -326,8 +336,11 @@ Keep it engaging and consequence-focused."""
         
         try:
             return self.llm.generate_response(prompt).strip()
-        except:
-            return f"You {choice.lower()}, and the consequences ripple outward like stones cast into still water."
+        except Exception as e:
+            if self.fallback_mode:
+                return f"You {choice.lower()}, and the consequences ripple outward like stones cast into still water."
+            else:
+                raise RuntimeError(f"Choice narrative generation failed and fallback mode disabled: {e}")
     
     def _get_world_state_changes(self) -> Dict:
         """Get current world state for reporting"""
@@ -336,7 +349,10 @@ Keep it engaging and consequence-focused."""
     def generate_dynamic_encounter(self, location: str, theme: str) -> Optional[Dict]:
         """Generate dynamic encounters based on player history and world state"""
         if not self.llm:
-            return self._generate_fallback_encounter(location, theme)
+            if self.fallback_mode:
+                return self._generate_fallback_encounter(location, theme)
+            else:
+                raise RuntimeError("LLM is required for dynamic encounter generation (fallback mode disabled)")
         
         # Consider player's story so far
         recent_choices = self.player_history["choices"][-3:] if self.player_history["choices"] else []
@@ -364,8 +380,11 @@ NPC_INVOLVED: name (motivation)"""
         try:
             response = self.llm.generate_response(prompt)
             return self._parse_encounter_response(response)
-        except:
-            return self._generate_fallback_encounter(location, theme)
+        except Exception as e:
+            if self.fallback_mode:
+                return self._generate_fallback_encounter(location, theme)
+            else:
+                raise RuntimeError(f"Dynamic encounter generation failed and fallback mode disabled: {e}")
     
     def _parse_encounter_response(self, response: str) -> Dict:
         """Parse LLM encounter response"""
