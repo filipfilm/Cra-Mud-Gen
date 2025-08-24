@@ -1,5 +1,5 @@
 """
-Main Dun-Gen Engine class that orchestrates the game flow
+Main Cra-mud-gen Engine class that orchestrates the game flow
 """
 import sys
 import os
@@ -22,13 +22,15 @@ from llm.llm_interface import LLMIntegrationLayer
 from core.map_system import MapSystem
 from core.context_manager import ContextManager
 from core.save_system import SaveSystem
+from core.narrative_engine import NarrativeEngine
+from core.story_seed_generator import StorySeed
 
 class GameEngine:
     """
     Main game engine that manages the game loop, state, and interactions
     """
     
-    def __init__(self):
+    def __init__(self, story_seed: Optional[StorySeed] = None):
         self.context_manager = ContextManager()  # Initialize context manager first
         self.player = Player()
         self.ui = TerminalUI()
@@ -41,11 +43,24 @@ class GameEngine:
         self.world = World(self.context_manager, self.llm.llm)  # Pass LLM to world for ASCII art
         self.command_processor = CommandProcessor()
         self.combat_system = CombatSystem()
-        self.conversation_system = ConversationSystem(self.world)  # Pass world reference
+        self.conversation_system = ConversationSystem(self.world, self.llm.llm)  # Pass world and LLM
         self.story_engine = StoryEngine(self.llm.llm)
         self.choice_processor = ChoiceProcessor(self.story_engine, self.llm.llm)
         self.map_system = MapSystem()  # Initialize mapping system
         self.save_system = SaveSystem()  # Initialize save system
+        
+        # Initialize narrative engine with story seed
+        self.narrative_engine = NarrativeEngine(self.llm.llm)
+        self.story_seed = story_seed
+        self.narrative_state = None
+        
+        if self.story_seed:
+            print(f"Initializing narrative with {self.story_seed.theme} theme...")
+            self.narrative_state = self.narrative_engine.initialize_narrative(self.story_seed)
+            
+            # Pass narrative context to world generation
+            self.world.set_narrative_context(self.narrative_state)
+        
         self.game_over = False
         
         # Combat state

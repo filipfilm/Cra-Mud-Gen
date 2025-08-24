@@ -6,7 +6,7 @@ import re
 
 class CommandProcessor:
     """
-    Parses and executes player commands in Dun-Gen
+    Parses and executes player commands in Cra-mud-gen
     """
     
     def __init__(self):

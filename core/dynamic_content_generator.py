@@ -15,23 +15,23 @@ class DynamicContentGenerator:
         self.generated_items = {}  # Cache for consistency
         self.generated_npcs = {}   # Cache for NPC personalities
     
-    def generate_room_contents(self, room_description: str, theme: str, depth: int) -> Dict[str, Any]:
-        """Generate items and NPCs for a room using LLM"""
+    def generate_room_contents(self, room_description: str, theme: str, depth: int, narrative_context: Dict = None) -> Dict[str, Any]:
+        """Generate items and NPCs for a room using LLM with optional narrative context"""
         if not self.llm:
-            return self._fallback_generation(room_description, theme, depth)
+            return self._fallback_generation(room_description, theme, depth, narrative_context)
         
         # Create LLM prompt for room contents
-        prompt = self._create_content_prompt(room_description, theme, depth)
+        prompt = self._create_content_prompt(room_description, theme, depth, narrative_context)
         
         try:
             response = self.llm.generate_response(prompt)
             return self._parse_llm_response(response, theme)
         except Exception as e:
             print(f"LLM generation failed: {e}")
-            return self._fallback_generation(room_description, theme, depth)
+            return self._fallback_generation(room_description, theme, depth, narrative_context)
     
-    def _create_content_prompt(self, room_description: str, theme: str, depth: int) -> str:
-        """Create prompt for LLM room content generation"""
+    def _create_content_prompt(self, room_description: str, theme: str, depth: int, narrative_context: Dict = None) -> str:
+        """Create prompt for LLM room content generation with narrative context"""
         
         # Adjust content based on depth
         if depth <= 3:
@@ -44,11 +44,25 @@ class DynamicContentGenerator:
             complexity = "complex, dangerous"
             item_rarity = "rare and magical"
         
+        # Add narrative context if available
+        narrative_info = ""
+        if narrative_context:
+            narrative_info = f"""
+STORY CONTEXT:
+- Setting: {narrative_context.get('setting', 'Unknown')}
+- Main Conflict: {narrative_context.get('conflict', 'Unknown')}
+- Mood: {narrative_context.get('mood', 'Neutral')}
+- Danger Level: {narrative_context.get('danger_level', 5)}/10
+- Mystery Level: {narrative_context.get('mystery_level', 5)}/10
+- Current Story Beat: {narrative_context.get('current_beat', 'None')}
+"""
+
         prompt = f"""You are generating content for a {theme} dungeon room at depth {depth}.
 
-ROOM DESCRIPTION: {room_description}
+ROOM DESCRIPTION: {room_description}{narrative_info}
 
 Generate appropriate items and NPCs for this room. The content should be {complexity} with {item_rarity} items.
+{narrative_context and "Consider the story context when selecting items and NPCs - they should reflect the narrative mood, danger level, and current story beat." or ""}
 
 Format your response EXACTLY like this:
 ITEMS: item1, item2, item3
@@ -56,27 +70,32 @@ NPCS: npc_name (occupation/role), another_npc (role)
 ITEM_DESCRIPTIONS:
 - item1: brief description
 - item2: brief description  
-DIALOGUES:
-- npc_name: greeting_message | topic1:response1 | topic2:response2
+NPC_PROFILES:
+- npc_name: personality_trait1, personality_trait2, personality_trait3 | speech_style | brief_background
 
 Rules:
 - Items should fit the room and theme
 - 1-4 items per room (fewer at low depths)
 - 0-1 NPCs per room (30% chance)
-- NPCs should have personality matching theme
 - Keep descriptions concise but atmospheric
 - Items can be weapons, armor, potions, tools, treasures, or magical items
 - NPCs can be merchants, guards, wizards, priests, etc.
 
-Example for a fantasy armory:
-ITEMS: enchanted sword, chainmail armor, shield of valor
-NPCS: Master Blacksmith (weaponsmith)
+For NPC_PROFILES:
+- List 3 personality traits (e.g., gruff, wise, cautious)
+- Speech style: gruff, mystical, formal, casual, or normal
+- One sentence background/motivation
+- The NPC will use LLM to respond naturally as this character
+
+Example for a fantasy cavern:
+ITEMS: rusted pickaxe, silver nugget, miner's lamp
+NPCS: Old Pete (prospector)
 ITEM_DESCRIPTIONS:
-- enchanted sword: A blade that glows with inner light, perfectly balanced
-- chainmail armor: Well-crafted rings of steel, still gleaming
-- shield of valor: A sturdy shield bearing ancient heraldry
-DIALOGUES:  
-- Master Blacksmith: *looks up from anvil* Need something forged? | weapons:I craft the finest blades in the realm! | armor:Protection is as important as offense, friend.
+- rusted pickaxe: A well-used mining tool, handle worn smooth by years of labor
+- silver nugget: A small chunk of precious metal, gleaming in the torch light
+- miner's lamp: An oil-burning lantern designed for underground exploration
+NPC_PROFILES:
+- Old Pete: gruff, experienced, lonely | gruff | An old miner who has spent decades working these tunnels alone, searching for silver veins.
 """
         
         return prompt
@@ -118,8 +137,8 @@ DIALOGUES:
             elif line.startswith('ITEM_DESCRIPTIONS:'):
                 current_section = "item_descriptions"
                 
-            elif line.startswith('DIALOGUES:'):
-                current_section = "dialogues"
+            elif line.startswith('NPC_PROFILES:'):
+                current_section = "npc_profiles"
                 
             elif current_section == "item_descriptions" and line.startswith('-'):
                 # Parse "- item: description"
@@ -128,30 +147,29 @@ DIALOGUES:
                     item_name, description = match.groups()
                     content["item_descriptions"][item_name.strip()] = description.strip()
                     
-            elif current_section == "dialogues" and line.startswith('-'):
-                # Parse "- npc_name: greeting | topic:response | topic:response"
+            elif current_section == "npc_profiles" and line.startswith('-'):
+                # Parse "- npc_name: trait1, trait2, trait3 | speech_style | background"
                 match = re.match(r'-\s*([^:]+):\s*(.+)', line)
                 if match:
-                    npc_name, dialogue_text = match.groups()
-                    dialogue_parts = dialogue_text.split('|')
+                    npc_name, profile_text = match.groups()
+                    profile_parts = profile_text.split('|')
                     
-                    if dialogue_parts:
-                        greeting = dialogue_parts[0].strip()
-                        topics = {}
-                        
-                        for part in dialogue_parts[1:]:
-                            if ':' in part:
-                                topic, response = part.split(':', 1)
-                                topics[topic.strip()] = response.strip()
+                    if len(profile_parts) >= 3:
+                        traits = [t.strip() for t in profile_parts[0].split(',')]
+                        speech_style = profile_parts[1].strip()
+                        background = profile_parts[2].strip()
                         
                         content["npc_dialogues"][npc_name.strip()] = {
-                            "greeting": greeting,
-                            "topics": topics
+                            "personality_traits": traits,
+                            "speech_pattern": speech_style,
+                            "background": background,
+                            "greeting": f"*looks up* Greetings, traveler.",
+                            "farewell": "Safe travels, friend."
                         }
         
         return content
     
-    def _fallback_generation(self, room_description: str, theme: str, depth: int) -> Dict[str, Any]:
+    def _fallback_generation(self, room_description: str, theme: str, depth: int, narrative_context: Dict = None) -> Dict[str, Any]:
         """Fallback content generation when LLM fails"""
         content = {
             "items": [],
@@ -190,11 +208,11 @@ DIALOGUES:
                 npc_name, npc_role = random.choice(npcs)
                 content["npcs"] = [{"name": npc_name, "role": npc_role}]
                 content["npc_dialogues"][npc_name] = {
+                    "personality_traits": ["helpful", "experienced", "cautious"],
+                    "speech_pattern": "normal",
+                    "background": f"A {npc_role} who knows these lands well.",
                     "greeting": f"*nods* Greetings, traveler.",
-                    "topics": {
-                        "help": "I might be able to assist you.",
-                        "information": "I know a few things about these parts."
-                    }
+                    "farewell": "May your path be safe, traveler."
                 }
         
         return content
@@ -225,7 +243,7 @@ Keep it immersive and thematic for {theme} setting."""
             self.generated_items[item_name] = fallback
             return fallback
     
-    def create_dynamic_npc_conversation(self, npc_name: str, npc_role: str, theme: str) -> Dict[str, Any]:
+    def create_dynamic_npc_conversation(self, npc_name: str, npc_role: str, theme: str, narrative_context: Dict = None) -> Dict[str, Any]:
         """Create a conversation personality for a dynamically generated NPC"""
         if npc_name in self.generated_npcs:
             return self.generated_npcs[npc_name]
@@ -233,7 +251,23 @@ Keep it immersive and thematic for {theme} setting."""
         if not self.llm:
             return self._fallback_npc_personality(npc_name, npc_role, theme)
         
-        prompt = f"""Create a conversation personality for: {npc_name} ({npc_role}) in a {theme} setting.
+        # Add narrative context for NPC personality
+        narrative_info = ""
+        if narrative_context:
+            narrative_info = f"""
+            
+STORY CONTEXT:
+- Setting: {narrative_context.get('setting', 'Unknown')}
+- Main Conflict: {narrative_context.get('conflict', 'Unknown')}
+- Mood: {narrative_context.get('mood', 'Neutral')}
+- Current Story Beat: {narrative_context.get('current_beat', 'None')}
+
+The NPC should be aware of and reference these story elements in their dialogue."""
+
+        # Build the prompt with proper string handling
+        context_addition = " Their dialogue should reflect the current story context and mood." if narrative_context else ""
+        
+        prompt = f"""Create a conversation personality for: {npc_name} ({npc_role}) in a {theme} setting.{narrative_info}
 
 Generate responses for these topics (keep each response 1-2 sentences, in character):
 - greeting (how they first address the player)
@@ -252,7 +286,7 @@ TRADE: response about trading (or "N/A" if not applicable)
 QUEST: response about quests (or "N/A" if not applicable)
 PERSONALITY: brief description of their speaking style/personality
 
-Make them feel authentic to their role and the {theme} theme."""
+Make them feel authentic to their role and the {theme} theme.{context_addition}"""
         
         try:
             response = self.llm.generate_response(prompt)

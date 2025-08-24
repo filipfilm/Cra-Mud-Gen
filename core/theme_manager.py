@@ -1,5 +1,5 @@
 """
-Theme management system for Dun-Gen
+Theme management system for Cra-mud-gen
 """
 from typing import Dict, List
 

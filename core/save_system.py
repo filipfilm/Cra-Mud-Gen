@@ -1,5 +1,5 @@
 """
-Save/Load System for Dun-Gen
+Save/Load System for Cra-mud-gen
 Handles game state persistence with JSON serialization
 """
 import json
@@ -38,7 +38,7 @@ class SaveSystem:
                 'metadata': {
                     'save_version': '1.0',
                     'timestamp': datetime.datetime.now().isoformat(),
-                    'game_version': 'Dun-Gen v1.0',
+                    'game_version': 'Cra-mud-gen v1.0',
                     'save_name': save_name
                 },
                 'player': self._serialize_player(player),

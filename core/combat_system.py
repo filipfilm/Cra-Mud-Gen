@@ -1,5 +1,5 @@
 """
-Combat System for Dun-Gen
+Combat System for Cra-mud-gen
 Handles tactical turn-based combat, health, experience, and progression
 """
 import random

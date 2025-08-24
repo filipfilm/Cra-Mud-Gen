@@ -1,4 +1,4 @@
-# Requirements for Dun-Gen
+# Requirements for Cra-mud-gen
 # This file lists the dependencies needed to run the game
 
 # Core Python libraries (usually included with Python 3.8+)

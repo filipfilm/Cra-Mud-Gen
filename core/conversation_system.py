@@ -33,11 +33,12 @@ class NPCPersonality:
 class ConversationSystem:
     """Manages NPC conversations and dialogue"""
     
-    def __init__(self, world=None):
+    def __init__(self, world=None, llm=None):
         self.context = ConversationContext()
         self.npcs = self._initialize_npcs()
         self.conversation_patterns = self._initialize_patterns()
         self.world = world  # Reference to world for dynamic NPCs
+        self.llm = llm  # LLM for character embodiment
     
     def _initialize_npcs(self) -> Dict[str, NPCPersonality]:
         """Initialize NPC personalities and dialogue"""
@@ -148,19 +149,26 @@ class ConversationSystem:
     
     def _create_dynamic_npc_personality(self, npc_name: str, dialogue_data: Dict) -> NPCPersonality:
         """Create NPCPersonality from dynamic dialogue data"""
+        # Extract NPC role from world if available
+        occupation = "Adventurer"  # Default
+        if self.world:
+            npc_info = self.world.get_npc_info(npc_name)
+            if npc_info:
+                occupation = npc_info.get("role", "Adventurer")
+        
         return NPCPersonality(
             name=npc_name,
-            occupation="Adventurer",  # Default
-            personality_traits=["dynamic"],
+            occupation=occupation,
+            personality_traits=dialogue_data.get("personality_traits", ["friendly"]),
             greeting=dialogue_data.get("greeting", f"Hello there, I'm {npc_name}."),
             farewell=dialogue_data.get("farewell", "Farewell, traveler."),
-            topics=dialogue_data.get("topics", {}),
-            default_response=dialogue_data.get("default_response", "*nods thoughtfully* That's an interesting thought, traveler."),
-            speech_pattern=dialogue_data.get("personality", "normal")
+            topics=dialogue_data.get("topics", {}),  # For backward compatibility
+            default_response=f"*{occupation.lower()} nods thoughtfully* That's an interesting thought, traveler.",
+            speech_pattern=dialogue_data.get("speech_pattern", "normal")
         )
     
     def _process_conversation(self, npc: NPCPersonality, player_input: str) -> str:
-        """Process player input and generate NPC response"""
+        """Process player input and generate NPC response using LLM"""
         player_input_lower = player_input.lower().strip()
         
         # Add to conversation history
@@ -171,25 +179,11 @@ class ConversationSystem:
             self._end_conversation()
             return npc.farewell
         
-        # Find matching topic
-        topic_match = self._find_topic_match(npc, player_input_lower)
-        
-        if topic_match:
-            response = npc.topics[topic_match]
-            self.context.last_topic = topic_match
-            
-            # Add context-aware additions
-            response = self._add_contextual_elements(npc, response, player_input_lower)
-            
-        else:
-            # Generate contextual default response
-            response = self._generate_contextual_default(npc, player_input_lower)
+        # Generate response using LLM with character context
+        response = self._generate_character_response(npc, player_input)
         
         # Add to conversation history
         self.context.conversation_history.append(f"{npc.name}: {response}")
-        
-        # Apply speech pattern formatting
-        response = self._apply_speech_pattern(response, npc.speech_pattern)
         
         return response
     
@@ -197,12 +191,20 @@ class ConversationSystem:
         """Find the best matching topic for player input"""
         # Enhanced topic matching with synonyms
         topic_synonyms = {
-            "help": ["help", "assist", "aid", "guidance", "what do you do", "what can you", "can you help"],
-            "information": ["information", "info", "know", "tell me", "what about", "news", "rumors", "gossip"],
+            "name": ["name", "what's your name", "whats your name", "who are you", "what are you called", "introduce yourself"],
+            "story": ["story", "tell me about yourself", "background", "history", "past", "how long", "how did you"],
+            "help": ["help", "assist", "aid", "guidance", "what do you do", "what can you", "can you help", "support"],
+            "information": ["information", "info", "know", "tell me", "what about", "news", "rumors", "gossip", "advice"],
             "directions": ["directions", "way", "path", "route", "where", "how do i get", "which way"],
             "adventure": ["adventure", "quest", "mission", "task", "journey", "explore"],
             "trade": ["trade", "buy", "sell", "shop", "goods", "wares"],
-            "quest": ["quest", "task", "mission", "job", "work", "adventure"]
+            "quest": ["quest", "task", "mission", "job", "work", "adventure"],
+            "dangers": ["danger", "dangerous", "warning", "threat", "risk", "beware", "careful"],
+            "advice": ["advice", "tip", "suggestion", "recommend", "guidance", "wisdom"],
+            "mining": ["mining", "mine", "dig", "ore", "silver", "gold", "treasure", "tunnel"],
+            "magic": ["magic", "spell", "enchantment", "sorcery", "wizard", "mystical"],
+            "weapon": ["weapon", "sword", "blade", "armor", "shield", "fight", "combat"],
+            "farewell": ["farewell", "goodbye", "bye", "see you", "until next time"]
         }
         
         # Direct topic matches first
@@ -270,10 +272,67 @@ class ConversationSystem:
         
         return response
     
-    def _generate_contextual_default(self, npc: NPCPersonality, player_input: str) -> str:
-        """Generate a contextual default response"""
-        # Check if it's a question
-        if any(word in player_input for word in ["?", "who", "what", "where", "when", "why", "how"]):
+    def _generate_character_response(self, npc: NPCPersonality, player_input: str) -> str:
+        """Generate character response using LLM"""
+        # Try LLM first if available
+        if hasattr(self, 'llm') and self.llm:
+            try:
+                return self._generate_llm_character_response(npc, player_input)
+            except Exception as e:
+                print(f"LLM character response failed: {e}")
+        
+        # Fallback to topic-based or contextual response
+        return self._generate_fallback_response(npc, player_input)
+    
+    def _generate_llm_character_response(self, npc: NPCPersonality, player_input: str) -> str:
+        """Generate response using LLM with character embodiment"""
+        # Build conversation history context
+        history_context = ""
+        if len(self.context.conversation_history) > 0:
+            recent_history = self.context.conversation_history[-4:]  # Last 4 exchanges
+            history_context = "\n".join(recent_history)
+        
+        # Create character embodiment prompt
+        # Get additional background info if available
+        background_info = ""
+        if self.world:
+            dialogue_data = self.world.get_npc_dialogue_data(npc.name)
+            if dialogue_data and "background" in dialogue_data:
+                background_info = f"\nBackground: {dialogue_data['background']}"
+        
+        prompt = f"""You are {npc.name}, a {npc.occupation} with these personality traits: {', '.join(npc.personality_traits)}.
+
+Your speaking style is {npc.speech_pattern}. Stay completely in character.{background_info}
+
+Recent conversation history:
+{history_context}
+
+Player just said: "{player_input}"
+
+Respond as {npc.name} would, staying true to your character. Keep response conversational and natural (1-2 sentences). If you don't know something specific, respond as your character would - don't break character.
+
+Remember:
+- You are {npc.occupation} 
+- Your personality is: {', '.join(npc.personality_traits)}
+- Speak in {npc.speech_pattern} style
+- Stay in character at all times
+- Be helpful but authentic to who you are
+- Answer questions about yourself naturally (your name is {npc.name}, you are a {npc.occupation})"""
+        
+        response = self.llm.generate_response(prompt)
+        return response.strip()
+    
+    def _generate_fallback_response(self, npc: NPCPersonality, player_input: str) -> str:
+        """Fallback response when LLM unavailable"""
+        player_input_lower = player_input.lower().strip()
+        
+        # Find matching topic first (for backward compatibility)
+        topic_match = self._find_topic_match(npc, player_input_lower)
+        if topic_match and npc.topics:
+            return npc.topics[topic_match]
+        
+        # Generate contextual default response
+        if any(word in player_input_lower for word in ["?", "who", "what", "where", "when", "why", "how"]):
             if npc.speech_pattern == "gruff":
                 return "*scratches head* Can't say I know the answer to that one, friend."
             elif npc.speech_pattern == "mystical":
@@ -281,21 +340,8 @@ class ConversationSystem:
             else:
                 return "That's a good question... I'm afraid I don't have an answer for that."
         
-        # Check if player is making statements or agreeing
-        if any(word in player_input for word in ["i am", "i'm", "yes", "indeed", "that's right"]):
+        if any(word in player_input_lower for word in ["i am", "i'm", "yes", "indeed", "that's right"]):
             return "*nods approvingly* I can see that about you, traveler."
-        
-        # Check if player wants continuation or more info  
-        if any(word in player_input for word in ["to what", "continue", "go on", "and then"]):
-            return "*pauses thoughtfully* Perhaps we should speak of other matters..."
-        
-        # Check if player seems confused
-        if any(word in player_input for word in ["confused", "don't understand", "what do you mean"]):
-            return "Let me explain better... " + npc.default_response
-        
-        # Check for adventure/direction related queries
-        if any(word in player_input for word in ["way", "direction", "adventure", "path"]):
-            return "*gestures around* There are many paths in this world, choose wisely."
         
         return npc.default_response
     

@@ -31,21 +31,54 @@ class World:
         self.context_manager = context_manager
         self.llm = llm  # LLM instance for ASCII art generation
         
-    def generate_dungeon(self, theme: str):
+        # Narrative integration
+        self.narrative_state = None
+        self.narrative_engine = None
+    
+    def set_narrative_context(self, narrative_state):
+        """
+        Set the narrative context for the world
+        
+        Args:
+            narrative_state: The NarrativeState object to use
+        """
+        self.narrative_state = narrative_state
+        if narrative_state:
+            # Update theme based on story seed
+            self.theme = narrative_state.seed.theme
+            print(f"World narrative context set: {self.theme} theme with {len(narrative_state.seed.story_beats)} story beats")
+        
+    def generate_dungeon(self, theme: str = None):
         """
         Initialize the dungeon with just the starting room
         """
-        self.theme = theme
+        # Use theme from narrative state if available, otherwise use provided theme
+        if self.narrative_state:
+            self.theme = self.narrative_state.seed.theme
+        elif theme:
+            self.theme = theme
+        else:
+            self.theme = "fantasy"  # Default fallback
         
         # Create only the starting room - everything else generated on demand
-        start_room = self.generate_starting_room(theme)
+        start_room = self.generate_starting_room()
         self.rooms["start"] = start_room
     
-    def generate_starting_room(self, theme: str) -> Room:
+    def generate_starting_room(self, theme: str = None) -> Room:
         """
-        Generate the starting room with dynamic exits
+        Generate the starting room with dynamic exits and narrative context
         """
-        description = f"You stand at the entrance of a {theme} dungeon. The air is thick with mystery and adventure awaits."
+        current_theme = theme or self.theme
+        
+        # Base description with narrative enhancement
+        if self.narrative_state and self.narrative_state.seed.setting:
+            description = f"You stand at the entrance of {self.narrative_state.seed.setting}. The air is thick with mystery and adventure awaits."
+        else:
+            description = f"You stand at the entrance of a {current_theme} dungeon. The air is thick with mystery and adventure awaits."
+        
+        # Add story-specific atmosphere if available
+        if self.narrative_state and self.narrative_state.seed.custom_text:
+            description += f" {self.narrative_state.seed.custom_text[:100]}..."
         
         # Starting room has 2-3 exits randomly
         available_directions = ["north", "east", "south", "west"]
@@ -73,12 +106,19 @@ class World:
         
     def generate_room(self, room_id: str, theme: str, from_room: str = None, direction: str = None) -> Room:
         """
-        Generate a single room procedurally with dynamic exits
+        Generate a single room procedurally with dynamic exits and narrative integration
         """
         # Parse room depth from ID (e.g., "north_3" means 3rd room north)
         depth = self._get_room_depth(room_id)
         
-        # Get spatially-aware room type
+        # Check for narrative triggers at this depth
+        narrative_trigger = None
+        if self.narrative_state and hasattr(self.narrative_state, 'seed') and self.narrative_state.seed.story_beats:
+            beat_index = min(depth // 3, len(self.narrative_state.seed.story_beats) - 1)
+            if beat_index < len(self.narrative_state.seed.story_beats):
+                narrative_trigger = self.narrative_state.seed.story_beats[beat_index]
+        
+        # Get spatially-aware room type, influenced by narrative
         if self.context_manager and from_room:
             room_type = self.context_manager.suggest_room_type(room_id, from_room, direction)
         else:
@@ -100,6 +140,15 @@ class World:
                 room_types = self.theme_manager.get_theme_room_types(theme)
                 room_type = random.choice(room_types) if room_types else "chamber"
         
+        # Modify room type based on narrative trigger
+        if narrative_trigger and depth > 0:
+            if "library" in narrative_trigger.lower() or "knowledge" in narrative_trigger.lower():
+                room_type = "library"
+            elif "shrine" in narrative_trigger.lower() or "altar" in narrative_trigger.lower() or "sacred" in narrative_trigger.lower():
+                room_type = "shrine"
+            elif "armory" in narrative_trigger.lower() or "weapon" in narrative_trigger.lower():
+                room_type = "armory"
+        
         # Get theme information
         adjectives = self.theme_manager.get_theme_adjectives(theme)
         nouns = self.theme_manager.get_theme_nouns(theme)
@@ -108,16 +157,32 @@ class World:
         adjective = self._get_spatial_adjective(room_type, theme, adjectives)
         noun = self._get_spatial_noun(room_type, theme, nouns)
         
-        # Create spatially-consistent description
+        # Create spatially-consistent description with narrative enhancement
         description = self._create_spatial_description(room_type, adjective, noun, theme, from_room, direction)
         
-        # Generate dynamic content using LLM
-        dynamic_content = self.content_generator.generate_room_contents(description, theme, depth)
+        # Add narrative trigger description if present
+        if narrative_trigger and depth > 0:
+            description += f" {narrative_trigger}"
+        
+        # Generate dynamic content using LLM with narrative context
+        narrative_context = None
+        if self.narrative_state:
+            narrative_context = {
+                "theme": self.narrative_state.seed.theme,
+                "setting": self.narrative_state.seed.setting,
+                "conflict": self.narrative_state.seed.conflict,
+                "mood": self.narrative_state.seed.mood,
+                "danger_level": self.narrative_state.seed.danger_level,
+                "mystery_level": self.narrative_state.seed.mystery_level,
+                "current_beat": narrative_trigger
+            }
+        
+        dynamic_content = self.content_generator.generate_room_contents(description, theme, depth, narrative_context)
         items = dynamic_content.get("items", [])
         npcs = [npc["name"] for npc in dynamic_content.get("npcs", [])]
         
-        # Store NPC dialogue data for conversation system
-        self._store_npc_dialogues(dynamic_content.get("npcs", []), dynamic_content.get("npc_dialogues", {}), theme)
+        # Store NPC dialogue data for conversation system with narrative awareness
+        self._store_npc_dialogues(dynamic_content.get("npcs", []), dynamic_content.get("npc_dialogues", {}), theme, narrative_context)
         
         # Add special items at certain depths to encourage deep exploration
         if depth > 0 and depth % 5 == 0:  # Every 5th depth level
@@ -632,8 +697,8 @@ class World:
             self.theme
         )
     
-    def _store_npc_dialogues(self, npcs: List[Dict], npc_dialogues: Dict, theme: str):
-        """Store NPC dialogue data for the conversation system"""
+    def _store_npc_dialogues(self, npcs: List[Dict], npc_dialogues: Dict, theme: str, narrative_context: Dict = None):
+        """Store NPC dialogue data for the conversation system with narrative awareness"""
         for npc in npcs:
             npc_name = npc["name"]
             npc_role = npc["role"]
@@ -642,13 +707,34 @@ class World:
             if npc_name in npc_dialogues:
                 dialogue_data = npc_dialogues[npc_name]
             else:
-                # Generate dialogue using content generator
-                dialogue_data = self.content_generator.create_dynamic_npc_conversation(npc_name, npc_role, theme)
+                # Generate dialogue using content generator with narrative context
+                if hasattr(self.content_generator, 'create_dynamic_npc_conversation'):
+                    if narrative_context:
+                        dialogue_data = self.content_generator.create_dynamic_npc_conversation(npc_name, npc_role, theme, narrative_context)
+                    else:
+                        dialogue_data = self.content_generator.create_dynamic_npc_conversation(npc_name, npc_role, theme)
+                else:
+                    # Fallback for dialogue generation
+                    dialogue_data = {
+                        "greeting": f"Hello, traveler. I am {npc_name}.",
+                        "topics": ["local area", "dangers ahead", "rumors"],
+                        "farewell": "Safe travels!"
+                    }
             
-            # Store for conversation system (we'll need to integrate this)
+            # Store for conversation system
             setattr(self, f'_npc_dialogue_{npc_name.lower().replace(" ", "_")}', dialogue_data)
     
     def get_npc_dialogue_data(self, npc_name: str) -> Optional[Dict]:
         """Get stored dialogue data for an NPC"""
         attr_name = f'_npc_dialogue_{npc_name.lower().replace(" ", "_")}'
         return getattr(self, attr_name, None)
+    
+    def get_npc_info(self, npc_name: str) -> Optional[Dict]:
+        """Get basic NPC info (role, etc.) from room data"""
+        for room in self.rooms.values():
+            for npc_data in room.npcs:
+                if isinstance(npc_data, dict) and npc_data.get("name", "").lower() == npc_name.lower():
+                    return npc_data
+                elif isinstance(npc_data, str) and npc_data.lower() == npc_name.lower():
+                    return {"name": npc_data, "role": "traveler"}
+        return None

@@ -1,5 +1,5 @@
 """
-Ollama LLM integration for Dun-Gen - using Mistral-Small
+Ollama LLM integration for Cra-mud-gen - using Mistral-Small
 """
 import requests
 import json

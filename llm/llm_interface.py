@@ -1,5 +1,5 @@
 """
-LLM Interface for Dun-Gen - connects to local language models
+LLM Interface for Cra-mud-gen - connects to local language models
 """
 import json
 from typing import Dict, Any, Optional

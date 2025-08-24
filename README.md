@@ -1,6 +1,6 @@
-# Dun-Gen
+# Cra-mud-gen
 
-A dynamic dungeon generator and text-based adventure game that creates unique stories every time, featuring:
+A crazy MUD generator with AI-powered storytelling that creates unique narrative-driven dungeons every time, featuring:
 - Procedurally generated dungeons and themes
 - Local LLM integration for natural language responses
 - Text-to-image generation capabilities
@@ -35,7 +35,7 @@ A dynamic dungeon generator and text-based adventure game that creates unique st
 ## Project Structure
 
 ```
-dun-gen/
+cra-mud-gen/
 ├── main.py                 # Main entry point
 ├── requirements.txt        # Project dependencies
 ├── README.md               # This file

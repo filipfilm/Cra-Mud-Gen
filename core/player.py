@@ -6,7 +6,7 @@ from .combat_system import Combatant, HealthSystem, ExperienceSystem
 
 class Player(Combatant):
     """
-    Represents the player in Dun-Gen - now with combat capabilities
+    Represents the player in Cra-mud-gen - now with combat capabilities
     """
     
     def __init__(self):

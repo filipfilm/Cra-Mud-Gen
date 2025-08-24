@@ -1,5 +1,5 @@
 """
-Context Management System for Dun-Gen
+Context Management System for Cra-mud-gen
 Maintains spatial consistency and manages LLM context with FIFO
 """
 from typing import Dict, List, Any, Optional

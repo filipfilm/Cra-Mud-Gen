@@ -1,0 +1,40 @@
+{
+  "metadata": {
+    "save_version": "1.0",
+    "timestamp": "2025-08-23T07:14:07.607875",
+    "game_version": "Dun-Gen v1.0",
+    "save_name": "test_save.json"
+  },
+  "player": {
+    "location": "start_room",
+    "current_room_id": "start_room",
+    "theme": "fantasy",
+    "inventory": [],
+    "stats": {
+      "level": 1,
+      "experience": 0,
+      "gold": 0
+    },
+    "combat_stats": {
+      "enemies_defeated": 0,
+      "total_damage_dealt": 0,
+      "total_damage_taken": 0,
+      "critical_hits": 0,
+      "battles_won": 0,
+      "battles_fled": 0
+    },
+    "health": 100,
+    "max_health": 100,
+    "level": 1,
+    "is_dead": false
+  },
+  "world": {
+    "theme": "fantasy",
+    "rooms": {},
+    "room_counter": 0,
+    "generated_depth": 1
+  },
+  "story": {},
+  "combat": {},
+  "conversation": {}
+}

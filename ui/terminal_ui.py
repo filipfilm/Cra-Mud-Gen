@@ -1,5 +1,5 @@
 """
-Terminal-based user interface for Dun-Gen
+Terminal-based user interface for Cra-mud-gen
 """
 import os
 import sys
@@ -9,7 +9,7 @@ from .contextual_effects import ContextualEffects
 
 class TerminalUI:
     """
-    Text-based user interface for Dun-Gen
+    Text-based user interface for Cra-mud-gen
     """
     
     def __init__(self):
@@ -34,7 +34,7 @@ class TerminalUI:
         self.clear_screen()
         
         # Animated title with rainbow effect
-        title = "Welcome to Dun-Gen"
+        title = "Welcome to Cra-mud-gen"
         rainbow_title = Effects.rainbow_text(title)
         
         print(f"{Colors.BRIGHT_CYAN}{'=' * 60}{Colors.RESET}")
