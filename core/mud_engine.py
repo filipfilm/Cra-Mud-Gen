@@ -5,6 +5,7 @@ import sys
 import os
 import random
 from typing import Optional, Dict, Any
+from datetime import datetime
 
 # Add parent directory to path
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
@@ -24,6 +25,8 @@ from core.context_manager import ContextManager
 from core.save_system import SaveSystem
 from core.narrative_engine import NarrativeEngine
 from core.story_seed_generator import StorySeed
+from core.crafting_system import CraftingSystem
+from core.economy_system import EconomySystem
 
 class GameEngine:
     """
@@ -58,6 +61,13 @@ class GameEngine:
         self.narrative_engine = NarrativeEngine(self.llm.llm)
         self.story_seed = story_seed
         self.narrative_state = None
+        
+        # Initialize crafting system
+        self.crafting_system = CraftingSystem(self.llm.llm)
+        
+        # Initialize economy system
+        self.economy_system = EconomySystem(self.llm.llm)
+        self._setup_merchant_rooms()
         
         if self.story_seed:
             print(f"Initializing narrative with {self.story_seed.theme} theme...")
@@ -302,6 +312,28 @@ Type 'map' to see your dungeon map!
             self._handle_quickload()
         elif result["type"] == "list_saves":
             self._handle_list_saves()
+        elif result["type"] == "craft":
+            self._handle_craft_item(result["recipe"])
+        elif result["type"] == "recipes":
+            self._handle_show_recipes()
+        elif result["type"] == "skills":
+            self._handle_show_skills()
+        elif result["type"] == "enhance":
+            self._handle_enhance_item(result["item"])
+        elif result["type"] == "salvage":
+            self._handle_salvage_item(result["item"])
+        elif result["type"] == "trade":
+            self._handle_trade()
+        elif result["type"] == "buy":
+            self._handle_buy_item(result["item"])
+        elif result["type"] == "sell":
+            self._handle_sell_item(result["item"])
+        elif result["type"] == "haggle":
+            self._handle_haggle_item(result["item"])
+        elif result["type"] == "shop":
+            self._handle_browse_shop()
+        elif result["type"] == "prices":
+            self._handle_show_prices()
         elif result["type"] == "invalid":
             self.ui.display_error(result["message"])
         
@@ -1183,3 +1215,364 @@ Type 'map' to see your dungeon map!
         except Exception as e:
             self.ui.display_error(f"Error restoring game state: {e}")
             print(f"Restore error: {e}")  # Debug info
+    
+    def _handle_craft_item(self, recipe_name: str):
+        """Handle crafting an item"""
+        # Check if recipe is known
+        if recipe_name not in self.player.crafting.discovered_recipes:
+            self.ui.display_error(f"You don't know how to craft '{recipe_name}'")
+            return
+        
+        # Attempt to craft the item
+        success, crafted_item, message = self.crafting_system.craft_item(
+            recipe_name, 
+            self.player.crafting.skill_levels,
+            station=None,  # Could check current room for crafting stations
+            luck_bonus=0.0
+        )
+        
+        if success:
+            # Add to inventory and give experience
+            if crafted_item:
+                self.player.inventory.append(crafted_item.get_display_name())
+                recipe = self.crafting_system.recipes[recipe_name]
+                self.player.crafting.gain_experience(recipe.skill, recipe.experience_reward)
+                self.player.crafting.crafted_items_history.append(crafted_item.name)
+                
+            print(f"✓ {message}")
+        else:
+            print(f"✗ {message}")
+    
+    def _handle_show_recipes(self):
+        """Show all discovered recipes"""
+        if not self.player.crafting.discovered_recipes:
+            print("You haven't discovered any recipes yet.")
+            print("Try examining items, talking to NPCs, or reading books to learn recipes!")
+            return
+        
+        print("=== Known Recipes ===")
+        for recipe_name in self.player.crafting.discovered_recipes:
+            if recipe_name in self.crafting_system.recipes:
+                recipe = self.crafting_system.recipes[recipe_name]
+                skill_level = self.player.crafting.skill_levels.get(recipe.skill, 0)
+                can_craft = "✓" if skill_level >= recipe.skill_level_required else "✗"
+                print(f"{can_craft} {recipe.name} ({recipe.skill.value} {recipe.skill_level_required})")
+    
+    def _handle_show_skills(self):
+        """Show crafting skill levels and experience"""
+        print("=== Crafting Skills ===")
+        from core.crafting_system import CraftingSkill
+        
+        for skill in CraftingSkill:
+            level = self.player.crafting.skill_levels[skill]
+            exp = self.player.crafting.skill_experience[skill]
+            next_exp = self.player.crafting.get_exp_for_next_level(skill)
+            
+            print(f"{skill.value.title()}: Level {level} ({exp}/{next_exp} XP)")
+            
+        # Show achievements
+        if self.player.crafting.crafting_achievements:
+            print("\n=== Achievements ===")
+            for achievement in self.player.crafting.crafting_achievements:
+                print(f"🏆 {achievement.replace('_', ' ').title()}")
+    
+    def _handle_enhance_item(self, item_name: str):
+        """Handle enhancing an existing item"""
+        # For now, show available enhancement options
+        enhancements = {
+            "sharpen": "Increase damage (needs whetstone)",
+            "reinforce": "Increase durability (needs metal plates)",
+            "enchant_fire": "Add fire damage (needs fire crystal + enchanting dust)",
+            "soul_bind": "Bind to your soul (needs soul gem)"
+        }
+        
+        print(f"=== Enhancement Options for '{item_name}' ===")
+        for enhancement, description in enhancements.items():
+            print(f"• {enhancement}: {description}")
+        print("\nUse 'enhance <item> <type>' to enhance (not yet implemented)")
+    
+    def _handle_salvage_item(self, item_name: str):
+        """Handle salvaging materials from an item"""
+        # Check if item is in inventory
+        item_found = None
+        for item in self.player.inventory:
+            if item_name.lower() in item.lower():
+                item_found = item
+                break
+        
+        if not item_found:
+            print(f"You don't have '{item_name}' in your inventory.")
+            return
+        
+        # For now, give some basic materials
+        print(f"Salvaging '{item_found}'...")
+        print("You recover some basic materials.")
+        print("Note: Full salvaging system not yet implemented.")
+        
+        # Remove item from inventory
+        self.player.inventory.remove(item_found)
+    
+    def _handle_trade(self):
+        """Handle talking to a merchant in current room"""
+        merchant = self.economy_system.get_merchant_in_room(self.player.location)
+        
+        if not merchant:
+            print("There's no merchant here to trade with.")
+            print("Try looking for shops in places like 'market_square', 'forge', or 'dark_alley'.")
+            return
+        
+        # Check if merchant is open
+        if not merchant.is_open(datetime.now()):
+            schedule = merchant.schedule.get("weekday", (8, 20))
+            print(f"{merchant.name} is currently closed.")
+            print(f"Shop hours: {schedule[0]}:00 - {schedule[1]}:00")
+            return
+        
+        # Display merchant greeting based on personality
+        if merchant.personality.get("friendly"):
+            greeting = f"{merchant.name} greets you warmly: 'Welcome to my shop!'"
+        elif merchant.personality.get("gruff"):
+            greeting = f"{merchant.name} grunts: 'What do you want?'"
+        elif merchant.personality.get("mysterious"):
+            greeting = f"{merchant.name} speaks softly: 'Looking for something... special?'"
+        else:
+            greeting = f"{merchant.name}: 'How can I help you?'"
+        
+        print(greeting)
+        print(f"Your gold: {self.player.stats['gold']}")
+        print("Use 'shop' to see items, 'buy <item>' to purchase, 'sell <item>' to sell.")
+        
+        # Show reputation if significant
+        if merchant.reputation_with_player != 0:
+            rep_desc = "likes" if merchant.reputation_with_player > 0 else "dislikes"
+            print(f"({merchant.name} {rep_desc} you)")
+    
+    def _handle_browse_shop(self):
+        """Browse merchant's inventory"""
+        merchant = self.economy_system.get_merchant_in_room(self.player.location)
+        
+        if not merchant:
+            print("There's no merchant here.")
+            return
+        
+        if not merchant.inventory:
+            print(f"{merchant.name} has nothing for sale right now.")
+            return
+        
+        print(f"=== {merchant.name}'s Shop ===")
+        print(f"Your gold: {self.player.stats['gold']}")
+        print()
+        
+        for i, item in enumerate(merchant.inventory, 1):
+            price = merchant.get_selling_price(item, merchant.reputation_with_player)
+            can_afford = "✓" if self.player.stats['gold'] >= price else "✗"
+            rarity_color = {
+                "common": "",
+                "uncommon": "🟢",
+                "rare": "🔵", 
+                "epic": "🟣",
+                "legendary": "🟡"
+            }.get(item.rarity, "")
+            
+            print(f"{can_afford} {i}. {rarity_color}{item.name} - {price} gold ({item.rarity})")
+        
+        print()
+        print("Use 'buy <item name>' to purchase an item.")
+        if merchant.haggle_skill > 30:
+            print("You can try to 'haggle <item name>' for a better price.")
+    
+    def _handle_buy_item(self, item_name: str):
+        """Handle buying an item from merchant"""
+        merchant = self.economy_system.get_merchant_in_room(self.player.location)
+        
+        if not merchant:
+            print("There's no merchant here to buy from.")
+            return
+        
+        # Find item in merchant's inventory
+        item = self.economy_system.find_item_in_merchant(merchant, item_name)
+        if not item:
+            print(f"{merchant.name} doesn't have '{item_name}'.")
+            return
+        
+        # Conduct trade
+        success, message, gold_change = self.economy_system.conduct_trade(
+            merchant, item, True, self.player.stats['gold']
+        )
+        
+        if success:
+            # Add item to player inventory and deduct gold
+            self.player.inventory.append(item.name)
+            self.player.stats['gold'] += gold_change  # gold_change is negative for buying
+            print(f"✓ {message}")
+            
+            # Improve reputation slightly
+            merchant.reputation_with_player += 2
+        else:
+            print(f"✗ {message}")
+    
+    def _handle_sell_item(self, item_name: str):
+        """Handle selling an item to merchant"""
+        merchant = self.economy_system.get_merchant_in_room(self.player.location)
+        
+        if not merchant:
+            print("There's no merchant here to sell to.")
+            return
+        
+        # Find item in player inventory
+        item_found = None
+        for inv_item in self.player.inventory:
+            if item_name.lower() in inv_item.lower():
+                item_found = inv_item
+                break
+        
+        if not item_found:
+            print(f"You don't have '{item_name}' to sell.")
+            return
+        
+        # Convert to TradeGood (simplified - would normally look up in economy system)
+        from core.economy_system import TradeGood
+        trade_item = TradeGood(item_found, 50, "common", "common")  # Default values
+        
+        # Check if merchant is interested
+        price = merchant.get_buying_price(trade_item, merchant.reputation_with_player)
+        
+        if price < 1:
+            print(f"{merchant.name} isn't interested in that item.")
+            return
+        
+        # Conduct trade
+        success, message, gold_change = self.economy_system.conduct_trade(
+            merchant, trade_item, False, self.player.stats['gold']
+        )
+        
+        if success:
+            # Remove item from player inventory and add gold
+            self.player.inventory.remove(item_found)
+            self.player.stats['gold'] += gold_change  # gold_change is positive for selling
+            print(f"✓ {message}")
+            
+            # Improve reputation slightly
+            merchant.reputation_with_player += 1
+        else:
+            print(f"✗ {message}")
+    
+    def _handle_haggle_item(self, item_name: str):
+        """Handle haggling with merchant"""
+        merchant = self.economy_system.get_merchant_in_room(self.player.location)
+        
+        if not merchant:
+            print("There's no merchant here to haggle with.")
+            return
+        
+        # Find item in merchant's inventory
+        item = self.economy_system.find_item_in_merchant(merchant, item_name)
+        if not item:
+            print(f"{merchant.name} doesn't have '{item_name}' to haggle over.")
+            return
+        
+        # Attempt to haggle (using player level as crude charisma substitute)
+        player_charisma = self.player.stats.get('level', 1)
+        success, final_price, message = self.economy_system.haggle(
+            merchant, item, True, player_charisma
+        )
+        
+        print(message)
+        
+        if success:
+            print(f"New price: {final_price} gold")
+            print("Use 'buy {item_name}' to purchase at the haggled price.")
+        
+        # Store haggled price temporarily (simplified implementation)
+        if not hasattr(merchant, 'haggled_prices'):
+            merchant.haggled_prices = {}
+        merchant.haggled_prices[item.name] = final_price
+    
+    def _handle_show_prices(self):
+        """Show current market prices and economic events"""
+        print("=== Market Report ===")
+        
+        # Show active economic events
+        if self.economy_system.economic_events:
+            print("📈 Current Economic Events:")
+            for event_data in self.economy_system.economic_events:
+                event = event_data["event"]
+                remaining = event_data["duration"] - (self.economy_system.current_tick - event_data["started"])
+                print(f"  • {event.value.title()} (expires in {remaining} days)")
+            print()
+        
+        # Show sample prices
+        print("💰 Sample Market Prices:")
+        sample_items = ["health_potion", "iron_sword", "leather_armor", "iron_ore"]
+        
+        modifiers = self.economy_system._get_economic_modifiers()
+        for item_name in sample_items:
+            if item_name in self.economy_system.base_goods:
+                item = self.economy_system.base_goods[item_name]
+                current_price = item.get_current_price(modifiers)
+                base_price = item.base_price
+                
+                if current_price > base_price:
+                    trend = "📈"
+                elif current_price < base_price:
+                    trend = "📉"
+                else:
+                    trend = "➡️"
+                    
+                print(f"  {trend} {item.name}: {current_price}g (base: {base_price}g)")
+        
+        print()
+        print("Visit merchants to see their specific prices and inventory!")
+        
+        # Simulate one economic tick
+        self.economy_system.simulate_economy_tick()
+    
+    def _setup_merchant_rooms(self):
+        """Create special merchant rooms in the world"""
+        from core.room import Room
+        
+        # Market Square - General merchant
+        market_square = Room(
+            room_id="market_square",
+            description="A bustling market square filled with the sounds of commerce. Wooden stalls line the cobblestone plaza, and merchants hawk their wares to passing travelers. The air is thick with the scent of spices and fresh bread.",
+            items=["merchant_sign", "coin_purse"],
+            npcs=["Marcus the Trader"],
+            connections=["start_room"]
+        )
+        market_square.visited = False
+        market_square.depth = 1
+        self.world.rooms["market_square"] = market_square
+        
+        # Forge - Weaponsmith
+        forge = Room(
+            room_id="forge",
+            description="A sweltering smithy filled with the ring of hammer on anvil. Glowing embers dance in the forge's heart while weapons and armor hang from the walls. The air shimmers with heat.",
+            items=["anvil", "hammer", "cooling_barrel"],
+            npcs=["Thorin Ironforge"],
+            connections=["market_square"]
+        )
+        forge.visited = False
+        forge.depth = 2
+        self.world.rooms["forge"] = forge
+        
+        # Dark Alley - Black market
+        dark_alley = Room(
+            room_id="dark_alley",
+            description="A shadowy alley where few dare to tread. Whispers echo from hidden alcoves, and the air carries hints of danger and forbidden dealings. Cloaked figures move in the darkness.",
+            items=["hooded_cloak", "mysterious_package"],
+            npcs=["Shadow"],
+            connections=["market_square"]
+        )
+        dark_alley.visited = False
+        dark_alley.depth = 2
+        self.world.rooms["dark_alley"] = dark_alley
+        
+        # Add connections back to starting room
+        if "start_room" in self.world.rooms:
+            start_room = self.world.rooms["start_room"]
+            start_room.connections.extend(["market_square"])
+        
+        # Stock merchants with initial inventory
+        for merchant_id, merchant in self.economy_system.merchants.items():
+            if merchant_id != "traveling":  # Traveling merchant appears randomly
+                self.economy_system._restock_merchants()

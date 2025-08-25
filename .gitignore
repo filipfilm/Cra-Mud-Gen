@@ -104,3 +104,5 @@ image_cache/
 *.bak
 *~
 *.tmp
+.continue/assistants/new-assistant.yaml
+.gitignore

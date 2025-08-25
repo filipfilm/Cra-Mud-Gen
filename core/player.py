@@ -3,6 +3,7 @@ Player class to manage player state and information
 """
 from typing import List, Dict, Any
 from .combat_system import Combatant, HealthSystem, ExperienceSystem
+from .crafting_system import PlayerCrafting
 
 class Player(Combatant):
     """
@@ -14,7 +15,7 @@ class Player(Combatant):
         self.stats: Dict[str, Any] = {
             "level": 1,
             "experience": 0,
-            "gold": 0
+            "gold": 1000  # Start with some gold
         }
         
         # Initialize combat stats 
@@ -41,6 +42,11 @@ class Player(Combatant):
         self.rooms_discovered = 0
         self.exploration_points = 0
         self.visited_rooms.add("start_room")  # Mark starting room as visited
+        
+        # Crafting system
+        self.crafting = PlayerCrafting()
+        # Start with some basic recipes discovered
+        self.crafting.discovered_recipes.update(["healing_potion", "iron_sword"])
     
     @property
     def health(self) -> int:

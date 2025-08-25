@@ -31,7 +31,18 @@ class CommandProcessor:
             "load": r"^(load|load game)\s*(.*)\s*$",
             "quicksave": r"^(quicksave|qsave)\s*$",
             "quickload": r"^(quickload|qload)\s*$",
-            "list_saves": r"^(saves|list saves|show saves)\s*$"
+            "list_saves": r"^(saves|list saves|show saves)\s*$",
+            "craft": r"^(craft|make|create)\s+(.+)\s*$",
+            "recipes": r"^(recipes|list recipes|show recipes|recipe list)\s*$",
+            "skills": r"^(skills|crafting skills|show skills|skill levels)\s*$",
+            "enhance": r"^(enhance|improve|upgrade)\s+(.+)\s*$",
+            "salvage": r"^(salvage|scrap|disassemble)\s+(.+)\s*$",
+            "trade": r"^(trade|talk to merchant|speak with merchant)\s*$",
+            "buy": r"^(buy|purchase)\s+(.+)\s*$",
+            "sell": r"^(sell)\s+(.+)\s*$",
+            "haggle": r"^(haggle|negotiate)\s+(.+)\s*$",
+            "shop": r"^(shop|browse|list goods|show items)\s*$",
+            "prices": r"^(prices|market prices|economy)\s*$"
         }
         
     def parse(self, user_input: str, player, world) -> Dict[str, Any]:
@@ -114,6 +125,51 @@ class CommandProcessor:
             
         elif re.match(self.commands["list_saves"], user_input):
             return {"type": "list_saves"}
+            
+        elif re.match(self.commands["craft"], user_input):
+            match = re.match(self.commands["craft"], user_input)
+            recipe_name = match.group(2).strip()
+            return {"type": "craft", "recipe": recipe_name}
+            
+        elif re.match(self.commands["recipes"], user_input):
+            return {"type": "recipes"}
+            
+        elif re.match(self.commands["skills"], user_input):
+            return {"type": "skills"}
+            
+        elif re.match(self.commands["enhance"], user_input):
+            match = re.match(self.commands["enhance"], user_input)
+            item_name = match.group(2).strip()
+            return {"type": "enhance", "item": item_name}
+            
+        elif re.match(self.commands["salvage"], user_input):
+            match = re.match(self.commands["salvage"], user_input)
+            item_name = match.group(2).strip()
+            return {"type": "salvage", "item": item_name}
+            
+        elif re.match(self.commands["trade"], user_input):
+            return {"type": "trade"}
+            
+        elif re.match(self.commands["buy"], user_input):
+            match = re.match(self.commands["buy"], user_input)
+            item_name = match.group(2).strip()
+            return {"type": "buy", "item": item_name}
+            
+        elif re.match(self.commands["sell"], user_input):
+            match = re.match(self.commands["sell"], user_input)
+            item_name = match.group(2).strip()
+            return {"type": "sell", "item": item_name}
+            
+        elif re.match(self.commands["haggle"], user_input):
+            match = re.match(self.commands["haggle"], user_input)
+            item_name = match.group(2).strip()
+            return {"type": "haggle", "item": item_name}
+            
+        elif re.match(self.commands["shop"], user_input):
+            return {"type": "shop"}
+            
+        elif re.match(self.commands["prices"], user_input):
+            return {"type": "prices"}
             
         else:
             # Send unknown commands to LLM for narrative responses
@@ -204,6 +260,21 @@ Save/Load commands:
   quicksave/qsave  - Quick save to default slot
   quickload/qload  - Quick load from default slot
   saves            - List all saved games
+
+Crafting commands:
+  craft <recipe>   - Craft an item using a known recipe
+  recipes          - List all discovered recipes
+  skills           - Show your crafting skill levels
+  enhance <item>   - Enhance an existing item
+  salvage <item>   - Salvage materials from an item
+
+Trading commands:
+  trade            - Talk to merchant in current room
+  buy <item>       - Buy an item from a merchant
+  sell <item>      - Sell an item to a merchant
+  haggle <item>    - Try to negotiate a better price
+  shop             - Browse merchant's inventory
+  prices           - Check current market prices
   
   help/h           - Show this help text
   quit/q           - Exit the game
