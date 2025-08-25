@@ -351,7 +351,11 @@ class CraftingSystem:
         if self.llm:
             prompt = f"Generate a legendary effect name for a mythical {recipe.output}. Keep it under 5 words and epic."
             try:
-                response = self.llm.generate_game_response(prompt, {"theme": "fantasy"})
+                # Check if llm is the interface or the actual LLM
+                if hasattr(self.llm, 'llm'):
+                    response = self.llm.llm.generate_game_response(prompt, {"theme": "fantasy"})
+                else:
+                    response = self.llm.generate_game_response(prompt, {"theme": "fantasy"})
                 return response.strip()
             except:
                 pass
@@ -549,3 +553,72 @@ class PlayerCrafting:
         # Grand Master of all trades
         if all(lvl >= 20 for lvl in self.skill_levels.values()):
             self.crafting_achievements.add("grand_master_crafter")
+    
+    def discover_recipe(self, recipe_name: str) -> bool:
+        """Discover a new recipe"""
+        if recipe_name not in self.discovered_recipes:
+            self.discovered_recipes.add(recipe_name)
+            return True
+        return False
+    
+    def learn_recipe(self, recipe_name: str) -> bool:
+        """Alias for discover_recipe for consistency"""
+        return self.discover_recipe(recipe_name)
+    
+    def can_craft(self, recipe_name: str, crafting_system: 'CraftingSystem') -> bool:
+        """Check if player can craft a specific recipe"""
+        if recipe_name not in self.discovered_recipes:
+            return False
+        
+        if recipe_name not in crafting_system.recipes:
+            return False
+        
+        recipe = crafting_system.recipes[recipe_name]
+        
+        # Check skill requirement (recipe has single skill, not multiple)
+        if self.skill_levels[recipe.skill] < recipe.skill_level_required:
+            return False
+        
+        return True
+    
+    def craft_item(self, recipe_name: str, crafting_system: 'CraftingSystem', materials: Dict[str, int] = None) -> Optional['CraftedItem']:
+        """Attempt to craft an item"""
+        if not self.can_craft(recipe_name, crafting_system):
+            return None
+        
+        # Use the main crafting system to do the actual crafting
+        result = crafting_system.craft_item(recipe_name, self.skill_levels, materials or {})
+        
+        if result['success']:
+            # Gain experience for successful craft
+            recipe = crafting_system.recipes[recipe_name]
+            skill = recipe.skill  # Get the recipe's skill
+            exp_gained = recipe.experience_reward  # Use recipe's experience reward
+            
+            self.gain_experience(skill, exp_gained)
+            self.crafted_items_history.append({
+                'item': recipe_name,
+                'quality': result['item'].quality.value,
+                'timestamp': 'now'  # Would use actual timestamp in real implementation
+            })
+            
+            return result['item']
+        
+        return None
+    
+    def get_craftable_recipes(self, crafting_system: 'CraftingSystem') -> List[str]:
+        """Get list of recipes the player can currently craft"""
+        craftable = []
+        for recipe_name in self.discovered_recipes:
+            if self.can_craft(recipe_name, crafting_system):
+                craftable.append(recipe_name)
+        return craftable
+    
+    def get_skill_info(self, skill: CraftingSkill) -> Dict[str, Any]:
+        """Get detailed information about a skill"""
+        return {
+            'level': self.skill_levels[skill],
+            'experience': self.skill_experience[skill],
+            'exp_to_next_level': self.get_exp_for_next_level(skill),
+            'progress_percent': (self.skill_experience[skill] / self.get_exp_for_next_level(skill)) * 100
+        }

@@ -50,10 +50,10 @@ class MapSystem:
     
     def _initialize_starting_area(self):
         """Initialize the starting room and basic layout"""
-        # Start room at center (0, 0)
-        self.add_room("start", 0, 0)
-        self.mark_visited("start")
-        self.player_location = "start"
+        # Start room at center (0, 0) - use correct room ID
+        self.add_room("start_room", 0, 0)
+        self.mark_visited("start_room")
+        self.player_location = "start_room"
     
     def add_room(self, room_id: str, x: int, y: int):
         """Add a room to the map system"""
@@ -95,6 +95,14 @@ class MapSystem:
             new_x, new_y = self._calculate_room_position(new_room_id, old_location)
             self.add_room(new_room_id, new_x, new_y)
     
+    def set_player_location(self, room_id: str):
+        """Set player location without movement tracking (for loading saves)"""
+        self.player_location = room_id
+        if room_id not in self.rooms:
+            # Add room at origin if we don't know where it should be
+            self.add_room(room_id, 0, 0)
+        self.mark_visited(room_id)
+    
     def _calculate_room_position(self, new_room_id: str, old_room_id: str) -> Tuple[int, int]:
         """Calculate room position based on movement direction"""
         if old_room_id not in self.room_coordinates:
@@ -121,27 +129,34 @@ class MapSystem:
         dx, dy = direction_offsets.get(direction, (0, 0))
         return (old_x + dx, old_y + dy)
     
-    def discover_room_exits(self, room_id: str, exits: List[str]):
-        """Discover potential exits from a room"""
+    def discover_room_exits(self, room_id: str, connections: List[str]):
+        """Discover potential exits from a room using connection strings"""
         if room_id not in self.rooms:
             return
             
         room_x, room_y = self.room_coordinates[room_id]
         
-        for exit_room_id in exits:
-            if exit_room_id not in self.rooms:
-                # Calculate position for the exit room
-                if "_" in exit_room_id:
-                    direction = exit_room_id.split("_")[0]
-                    direction_offsets = {
-                        "north": (0, -1),
-                        "south": (0, 1), 
-                        "east": (1, 0),
-                        "west": (-1, 0)
-                    }
+        for connection in connections:
+            # Parse connection format: "direction_destination"
+            if "_" in connection:
+                direction, destination = connection.split("_", 1)
+                
+                # Calculate position for the destination room
+                direction_offsets = {
+                    "north": (0, -1),
+                    "south": (0, 1), 
+                    "east": (1, 0),
+                    "west": (-1, 0),
+                    "up": (0, 0),    # Same position for vertical movement
+                    "down": (0, 0)   # Same position for vertical movement  
+                }
+                
+                if destination not in self.rooms:
                     dx, dy = direction_offsets.get(direction, (0, 0))
-                    self.add_room(exit_room_id, room_x + dx, room_y + dy)
-                    self.add_connection(room_id, direction, exit_room_id)
+                    self.add_room(destination, room_x + dx, room_y + dy)
+                
+                # Add bidirectional connection
+                self.add_connection(room_id, direction, destination)
     
     def generate_ascii_map(self, width: int = 21, height: int = 15) -> str:
         """Generate ASCII map of explored areas"""
@@ -169,7 +184,7 @@ class MapSystem:
                 
                 if room_id == self.player_location:
                     map_grid[map_y][map_x] = self.symbols['player']
-                elif room_id == "start":
+                elif room_id == "start_room":
                     map_grid[map_y][map_x] = self.symbols['start_room'] if room.visited else self.symbols['unvisited_room']
                 elif room.visited:
                     map_grid[map_y][map_x] = self.symbols['visited_room']
@@ -187,15 +202,19 @@ class MapSystem:
             
             for direction, connected_room_id in room.connections.items():
                 if connected_room_id in self.rooms and self.rooms[connected_room_id].visited:
-                    # Draw connection
-                    if direction == 'north' and map_y > 0:
-                        map_grid[map_y - 1][map_x] = self.symbols['corridor_v']
-                    elif direction == 'south' and map_y < height - 1:
-                        map_grid[map_y + 1][map_x] = self.symbols['corridor_v']
-                    elif direction == 'east' and map_x < width - 1:
-                        map_grid[map_y][map_x + 1] = self.symbols['corridor_h']
-                    elif direction == 'west' and map_x > 0:
-                        map_grid[map_y][map_x - 1] = self.symbols['corridor_h']
+                    # Draw connection only if the space is empty
+                    if direction == 'north' and map_y > 0 and 0 <= map_x < width:
+                        if map_grid[map_y - 1][map_x] == self.symbols['empty']:
+                            map_grid[map_y - 1][map_x] = self.symbols['corridor_v']
+                    elif direction == 'south' and map_y < height - 1 and 0 <= map_x < width:
+                        if map_grid[map_y + 1][map_x] == self.symbols['empty']:
+                            map_grid[map_y + 1][map_x] = self.symbols['corridor_v']
+                    elif direction == 'east' and map_x < width - 1 and 0 <= map_y < height:
+                        if map_grid[map_y][map_x + 1] == self.symbols['empty']:
+                            map_grid[map_y][map_x + 1] = self.symbols['corridor_h']
+                    elif direction == 'west' and map_x > 0 and 0 <= map_y < height:
+                        if map_grid[map_y][map_x - 1] == self.symbols['empty']:
+                            map_grid[map_y][map_x - 1] = self.symbols['corridor_h']
         
         # Convert grid to string
         map_lines = [''.join(row) for row in map_grid]
@@ -252,3 +271,45 @@ class MapSystem:
             'exploration_percentage': (total_visited / total_discovered * 100) if total_discovered > 0 else 0,
             'current_location': self.player_location
         }
+    
+    def debug_map_state(self) -> str:
+        """Get debug information about map state"""
+        debug_info = [
+            f"Player Location: {self.player_location}",
+            f"Total Rooms: {len(self.rooms)}",
+            f"Visited Rooms: {len(self.visited_rooms)}",
+            f"Room Coordinates: {self.room_coordinates}",
+            "Room Details:"
+        ]
+        
+        for room_id, room in self.rooms.items():
+            debug_info.append(f"  {room_id}: pos=({room.x}, {room.y}), visited={room.visited}, connections={room.connections}")
+        
+        return '\n'.join(debug_info)
+    
+    def sync_with_world(self, world, player):
+        """Synchronize map system with the current world state"""
+        # Update player location
+        if hasattr(player, 'location') and player.location:
+            self.player_location = player.location
+            
+            # Ensure player location is in our rooms
+            if player.location not in self.rooms:
+                self.add_room(player.location, 0, 0)
+            
+            self.mark_visited(player.location)
+        
+        # Sync all visited rooms from player
+        if hasattr(player, 'visited_rooms'):
+            for room_id in player.visited_rooms:
+                if room_id not in self.rooms:
+                    # Try to calculate position based on room name
+                    x, y = self._calculate_room_position(room_id, self.player_location)
+                    self.add_room(room_id, x, y)
+                self.mark_visited(room_id)
+        
+        # Update room connections from world
+        if hasattr(world, 'rooms'):
+            for room_id, world_room in world.rooms.items():
+                if hasattr(world_room, 'connections') and room_id in self.rooms:
+                    self.discover_room_exits(room_id, world_room.connections)

@@ -392,7 +392,11 @@ class EconomySystem:
         
         try:
             prompt = "Generate a unique exotic trade item. Format: Name|Price|Rarity|Origin. Example: Starlight Essence|2500|rare|Celestial Realm"
-            response = self.llm.generate_game_response(prompt, {"theme": "fantasy"})
+            # Check if llm is the interface or the actual LLM
+            if hasattr(self.llm, 'llm'):
+                response = self.llm.llm.generate_game_response(prompt, {"theme": "fantasy"})
+            else:
+                response = self.llm.generate_game_response(prompt, {"theme": "fantasy"})
             
             parts = response.strip().split("|")
             if len(parts) >= 4:

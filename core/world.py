@@ -3,7 +3,7 @@ World class to manage the game world and dungeon generation
 """
 import sys
 import os
-from typing import Dict, List, Optional
+from typing import Dict, List, Optional, Any
 import random
 
 # Add parent directory to path
@@ -158,8 +158,11 @@ class World:
         adjective = self._get_spatial_adjective(room_type, theme, adjectives)
         noun = self._get_spatial_noun(room_type, theme, nouns)
         
-        # Create spatially-consistent description with narrative enhancement
-        description = self._create_spatial_description(room_type, adjective, noun, theme, from_room, direction)
+        # Generate dynamic exits first so we can reference them in description
+        connections = self._generate_dynamic_exits(room_id, depth, direction, from_room)
+        
+        # Create spatially-consistent description with narrative enhancement and vertical hints
+        description = self._create_spatial_description(room_type, adjective, noun, theme, from_room, direction, connections)
         
         # Add narrative trigger description if present
         if narrative_trigger and depth > 0:
@@ -195,8 +198,7 @@ class World:
             rare_items = self._get_rare_items(theme)
             items.extend(rare_items)
         
-        # Generate dynamic exits based on depth and layout rules
-        connections = self._generate_dynamic_exits(room_id, depth, direction)
+        # Connections already generated above for description
         
         room = Room(
             room_id=room_id,
@@ -269,7 +271,7 @@ class World:
         return random.choice(nouns) if nouns else "object"
     
     def _create_spatial_description(self, room_type: str, adjective: str, noun: str, 
-                                  theme: str, from_room: str, direction: str) -> str:
+                                  theme: str, from_room: str, direction: str, connections: List[str] = None) -> str:
         """Create a description that makes spatial sense"""
         
         base_descriptions = {
@@ -284,6 +286,33 @@ class World:
         }
         
         base_description = base_descriptions.get(room_type, f"You are in a {adjective} {room_type}. {noun.capitalize()}s are scattered around.")
+        
+        # Add vertical movement hints based on connections
+        if connections:
+            up_connections = [conn for conn in connections if conn.startswith('up')]
+            down_connections = [conn for conn in connections if conn.startswith('down')]
+            
+            vertical_hints = []
+            if up_connections:
+                up_hints = {
+                    "fantasy": ["A stone stairway winds upward", "Wooden stairs creak above", "Ancient steps lead to higher chambers"],
+                    "sci-fi": ["A metal ladder extends upward", "An elevator shaft opens above", "Maintenance tunnels lead upward"],
+                    "horror": ["Rotting stairs disappear into darkness above", "A rickety ladder vanishes into shadow", "Creaking steps echo from above"]
+                }
+                hints = up_hints.get(theme, up_hints["fantasy"])
+                vertical_hints.append(random.choice(hints))
+                
+            if down_connections:
+                down_hints = {
+                    "fantasy": ["Stone steps descend into darkness", "A wooden trapdoor reveals stairs below", "Ancient passages lead downward"],
+                    "sci-fi": ["A maintenance shaft descends below", "An elevator platform waits below", "Metal grating covers a descent"],
+                    "horror": ["Decaying steps sink into black depths", "A gaping hole reveals horrors below", "Broken stairs spiral into the abyss"]
+                }
+                hints = down_hints.get(theme, down_hints["fantasy"])
+                vertical_hints.append(random.choice(hints))
+            
+            if vertical_hints:
+                base_description += f" {' '.join(vertical_hints)}."
         
         # Randomly add ASCII art to room descriptions (30% chance)
         if random.random() < 0.3:
@@ -368,6 +397,48 @@ class World:
         Get a room by its ID
         """
         return self.rooms.get(room_id)
+    
+    def validate_room_connections(self) -> Dict[str, Any]:
+        """Validate that all room connections point to valid destinations"""
+        issues = {
+            "dangling_connections": [],
+            "invalid_formats": [],
+            "missing_rooms": []
+        }
+        
+        for room_id, room in self.rooms.items():
+            for connection in room.connections:
+                # Check connection format
+                if "_" not in connection:
+                    issues["invalid_formats"].append({
+                        "room": room_id,
+                        "connection": connection,
+                        "issue": "Missing underscore separator"
+                    })
+                    continue
+                
+                # Extract destination
+                parts = connection.split("_", 1)
+                if len(parts) != 2:
+                    issues["invalid_formats"].append({
+                        "room": room_id, 
+                        "connection": connection,
+                        "issue": "Invalid format"
+                    })
+                    continue
+                
+                direction, destination = parts
+                
+                # Check if destination room exists (only if it should exist)
+                # Don't flag rooms that will be generated on demand
+                if destination not in self.rooms and not destination.startswith(('north_', 'south_', 'east_', 'west_', 'up_', 'down_')):
+                    issues["missing_rooms"].append({
+                        "room": room_id,
+                        "connection": connection,
+                        "destination": destination
+                    })
+        
+        return issues
         
     def get_room_by_location(self, location: str) -> Optional[Room]:
         """
@@ -387,11 +458,11 @@ class World:
         except (ValueError, IndexError):
             return 1
     
-    def _generate_dynamic_exits(self, room_id: str, depth: int, came_from_direction: str) -> List[str]:
+    def _generate_dynamic_exits(self, room_id: str, depth: int, came_from_direction: str, from_room_id: str = None) -> List[str]:
         """
         Generate dynamic exits based on room depth and procedural rules
         """
-        directions = ["north", "south", "east", "west"]
+        directions = ["north", "south", "east", "west", "up", "down"]
         
         # Always have a way back (opposite of the direction we came from)
         opposite_dir = self._get_opposite_direction(came_from_direction)
@@ -430,14 +501,47 @@ class World:
             # Dead end - no exits forward
             return []
         
-        # Remove the direction we came from to avoid going backward
+        # Always include the direction we came from for backtracking
         available_directions = [d for d in directions if d != opposite_dir]
         
         # Select random exits
         exits = random.sample(available_directions, min(num_exits, len(available_directions)))
         
-        # Add special room types that create longer paths
+        # Add contextual vertical movement based on room type and depth
+        vertical_chance = 0.3  # 30% chance for vertical connections
+        if random.random() < vertical_chance:
+            # Prefer "up" for surface/shallow areas, "down" for deeper areas
+            if depth <= 3:
+                # Near surface - more likely to have stairs going up
+                if "up" not in exits and "up" in available_directions and random.random() < 0.7:
+                    exits.append("up")
+            
+            if depth >= 2:
+                # Deeper areas - more likely to have basements/caverns going down  
+                if "down" not in exits and "down" in available_directions and random.random() < 0.6:
+                    exits.append("down")
+        
+        # Add connections
         room_connections = []
+        
+        # CRITICAL: Add backtrack connection with proper direction_destination format
+        if came_from_direction and opposite_dir:
+            if from_room_id:
+                # Use the actual room we came from for backtracking
+                room_connections.append(f"{opposite_dir}_{from_room_id}")
+            else:
+                # Fallback: Calculate where we came from based on naming conventions
+                current_depth = self._get_room_depth(room_id)
+                if current_depth > 1:
+                    # For rooms like "north_2", create "south_north_1" to go back 
+                    prev_depth = current_depth - 1
+                    back_room = f"{came_from_direction}_{prev_depth}"
+                    room_connections.append(f"{opposite_dir}_{back_room}")
+                elif current_depth == 1:
+                    # For rooms like "north_1", create "south_start" to go back to start
+                    room_connections.append(f"{opposite_dir}_start")
+        
+        # Add forward connections
         for direction in exits:
             next_depth = self._calculate_next_depth(depth, direction, room_id)
             room_connections.append(f"{direction}_{next_depth}")
@@ -495,6 +599,10 @@ class World:
         """
         if room_id in self.rooms:
             return self.rooms[room_id]
+        
+        # Validate room ID length to prevent issues
+        if len(room_id) > 50:
+            room_id = room_id[:50]  # Truncate overly long room names
         
         # Generate new room
         new_room = self.generate_room(room_id, self.theme, from_room_id, direction)
@@ -595,7 +703,11 @@ class World:
             # Generate ASCII art with 70% chance for banner, 30% for decoration
             art_type = "banner" if random.random() < 0.7 else "decoration"
             
-            return self.llm.generate_ascii_art(subject, theme, art_type)
+            # Check if llm is the interface or the actual LLM
+            if hasattr(self.llm, 'llm'):
+                return self.llm.llm.generate_ascii_art(subject, theme, art_type)
+            else:
+                return self.llm.generate_ascii_art(subject, theme, art_type)
             
         except Exception as e:
             print(f"Error generating room ASCII art: {e}")
@@ -605,35 +717,8 @@ class World:
                 raise RuntimeError(f"Room ASCII art generation failed and fallback mode disabled: {e}")
     
     def _fallback_room_ascii_art(self, room_type: str, theme: str) -> str:
-        """
-        Fallback ASCII art for rooms when LLM is unavailable
-        """
-        theme_banners = {
-            "fantasy": {
-                "chamber": "+===================+\n|   GRAND CHAMBER   |\n+===================+",
-                "library": "+===================+\n|  ANCIENT LIBRARY  |\n+===================+",
-                "shrine": "+===================+\n|   SACRED SHRINE   |\n+===================+",
-                "default": "  * A mystical place *"
-            },
-            "sci-fi": {
-                "chamber": "+==================+\n| COMMAND CHAMBER  |\n+==================+",
-                "library": "+==================+\n|  DATA ARCHIVES   |\n+==================+",
-                "default": "  > A tech facility <"
-            },
-            "horror": {
-                "chamber": "+------------------+\n| CURSED CHAMBER   |\n+------------------+",
-                "library": "+------------------+\n| FORBIDDEN LIBRARY|\n+------------------+",
-                "default": "  ~ A dark place ~"
-            },
-            "cyberpunk": {
-                "chamber": "+==================+\n| NEURAL INTERFACE |\n+==================+",
-                "library": "+==================+\n|   DATA NEXUS     |\n+==================+",
-                "default": "  [ A digital space ]"
-            }
-        }
-        
-        theme_art = theme_banners.get(theme, theme_banners["fantasy"])
-        return theme_art.get(room_type, theme_art["default"])
+        """Fallback ASCII art disabled - LLM generation required"""
+        raise RuntimeError("Fallback ASCII art disabled - LLM generation required")
     
     def generate_item_ascii_art(self, item_name: str, theme: str) -> str:
         """
@@ -647,7 +732,11 @@ class World:
         
         try:
             # Generate object-type ASCII art for items
-            return self.llm.generate_ascii_art(item_name, theme, "object")
+            # Check if llm is the interface or the actual LLM
+            if hasattr(self.llm, 'llm'):
+                return self.llm.llm.generate_ascii_art(item_name, theme, "object")
+            else:
+                return self.llm.generate_ascii_art(item_name, theme, "object")
         except Exception as e:
             print(f"Error generating item ASCII art: {e}")
             if self.fallback_mode:
@@ -656,29 +745,8 @@ class World:
                 raise RuntimeError(f"Item ASCII art generation failed and fallback mode disabled: {e}")
     
     def _fallback_item_ascii_art(self, item_name: str, theme: str) -> str:
-        """
-        Fallback ASCII art for items
-        """
-        simple_items = {
-            "sword": "   /|\\\n  /_|_\\\n   \\|/",
-            "shield": "   ___\n  /   \\\n |  O  |\n  \\___/",
-            "gem": "   /\\\n  /  \\\n  \\  /\n   \\/",
-            "book": "  ___\n |   |\n |___|\n |___|",
-            "potion": "   ___\n  (   )\n  |___|\n  \\___/",
-            "key": "   ___\n  |   |\n  |___|\n     |",
-            "torch": "   ^^^^\n    |\n    |\n   /|\\",
-            "scroll": "  ___\n ( ~ )\n ( ~ )\n  ---",
-            "ring": "   ___\n  (   )\n  (___)\n",
-            "staff": "   +=+\n    |\n    |\n   /|\\",
-            "default": f"   [{item_name[:8]}]"
-        }
-        
-        # Find matching item pattern
-        for key in simple_items:
-            if key in item_name.lower():
-                return simple_items[key]
-        
-        return simple_items["default"]
+        """Fallback ASCII art disabled - LLM generation required"""
+        raise RuntimeError("Fallback item ASCII art disabled - LLM generation required")
     
     def _infer_room_type_from_description(self, description: str) -> str:
         """Infer room type from description text for enemy spawning"""

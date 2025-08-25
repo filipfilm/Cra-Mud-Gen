@@ -327,7 +327,13 @@ Remember:
 - Be helpful but authentic to who you are
 - Answer questions about yourself naturally (your name is {npc.name}, you are a {npc.occupation})"""
         
-        response = self.llm.generate_response(prompt)
+        # Check if llm is the interface or the actual LLM
+        if hasattr(self.llm, 'llm'):
+            # It's the interface, use the actual LLM
+            response = self.llm.llm.generate_response(prompt)
+        else:
+            # It's the actual LLM
+            response = self.llm.generate_response(prompt)
         return response.strip()
     
     def _generate_fallback_response(self, npc: NPCPersonality, player_input: str) -> str:

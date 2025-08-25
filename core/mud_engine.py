@@ -48,25 +48,25 @@ class GameEngine:
             selected_model = self._select_model()
             self.llm = LLMIntegrationLayer(model_name=selected_model)
         
-        self.world = World(self.context_manager, self.llm.llm, fallback_mode=fallback_mode)  # Pass LLM to world for ASCII art
+        self.world = World(self.context_manager, self.llm, fallback_mode=fallback_mode)  # Pass LLM to world for ASCII art
         self.command_processor = CommandProcessor()
         self.combat_system = CombatSystem()
-        self.conversation_system = ConversationSystem(self.world, self.llm.llm, fallback_mode=fallback_mode)  # Pass world and LLM
-        self.story_engine = StoryEngine(self.llm.llm, fallback_mode=fallback_mode)
-        self.choice_processor = ChoiceProcessor(self.story_engine, self.llm.llm)
+        self.conversation_system = ConversationSystem(self.world, self.llm, fallback_mode=fallback_mode)  # Pass world and LLM
+        self.story_engine = StoryEngine(self.llm, fallback_mode=fallback_mode)
+        self.choice_processor = ChoiceProcessor(self.story_engine, self.llm)
         self.map_system = MapSystem()  # Initialize mapping system
         self.save_system = SaveSystem()  # Initialize save system
         
         # Initialize narrative engine with story seed
-        self.narrative_engine = NarrativeEngine(self.llm.llm)
+        self.narrative_engine = NarrativeEngine(self.llm)
         self.story_seed = story_seed
         self.narrative_state = None
         
         # Initialize crafting system
-        self.crafting_system = CraftingSystem(self.llm.llm)
+        self.crafting_system = CraftingSystem(self.llm)
         
         # Initialize economy system
-        self.economy_system = EconomySystem(self.llm.llm)
+        self.economy_system = EconomySystem(self.llm)
         self._setup_merchant_rooms()
         
         if self.story_seed:
@@ -190,9 +190,8 @@ class GameEngine:
         # Generate dungeon
         self.world.generate_dungeon(theme)
         
-        # Set player to start room
-        self.player.location = "start"
-        self.player.current_room_id = "start"
+        # Set player to start room using proper method
+        self.player.move_to_location("start_room")
         
         # Initialize story arc
         main_story = self.story_engine.initialize_story_arc(theme)
@@ -249,7 +248,7 @@ class GameEngine:
             current_room = self.world.get_room(self.player.location)
             if current_room:
                 # Just display the room (already enhanced in main loop)
-                self.ui.display_room(current_room, self.player)
+                self.ui.display_room(current_room, self.player, self.llm)
         elif result["type"] == "inventory":
             inventory_display = self._get_inventory_display()
             self.ui.display_message(inventory_display)
@@ -257,6 +256,8 @@ class GameEngine:
             self.ui.display_help(result["message"])
         elif result["type"] == "map":
             # Display the ASCII map
+            # Ensure map is properly synchronized before generating
+            self.map_system.sync_with_world(self.world, self.player)
             map_display = self.map_system.generate_ascii_map()
             self.ui.display_message(map_display)
         elif result["type"] == "stats":
@@ -291,7 +292,7 @@ Type 'map' to see your dungeon map!
         elif result["type"] == "examine":
             # Handle examining items with ASCII art and effects
             examine_result = self._handle_examine_item(result["item"])
-            self.ui.display_examine_result(examine_result, result["item"], self.player.theme)
+            self.ui.display_examine_result(examine_result, result["item"], self.player.theme, self.llm)
         elif result["type"] == "combat_action":
             # Handle combat actions
             if self.in_combat:

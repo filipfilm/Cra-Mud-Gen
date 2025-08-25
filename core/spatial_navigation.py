@@ -156,7 +156,11 @@ Examples:
 Generate the movement description:"""
         
         try:
-            response = self.llm.generate_response(prompt)
+            # Check if llm is the interface or the actual LLM
+            if hasattr(self.llm, 'llm'):
+                response = self.llm.llm.generate_response(prompt)
+            else:
+                response = self.llm.generate_response(prompt)
             if response and len(response.strip()) > 10:
                 return response.strip()
         except Exception as e:

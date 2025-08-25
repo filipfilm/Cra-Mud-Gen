@@ -88,7 +88,11 @@ class StoryEngine:
         prompt = self._create_story_arc_prompt(theme, player_background)
         
         try:
-            response = self.llm.generate_response(prompt)
+            # Check if llm is the interface or the actual LLM
+            if hasattr(self.llm, 'llm'):
+                response = self.llm.llm.generate_response(prompt)
+            else:
+                response = self.llm.generate_response(prompt)
             return self._parse_story_arc_response(response, theme)
         except Exception as e:
             print(f"Story generation failed: {e}")
@@ -335,7 +339,11 @@ Generate a dramatic, immersive response (2-3 sentences) that:
 Keep it engaging and consequence-focused."""
         
         try:
-            return self.llm.generate_response(prompt).strip()
+            # Check if llm is the interface or the actual LLM
+            if hasattr(self.llm, 'llm'):
+                return self.llm.llm.generate_response(prompt).strip()
+            else:
+                return self.llm.generate_response(prompt).strip()
         except Exception as e:
             if self.fallback_mode:
                 return f"You {choice.lower()}, and the consequences ripple outward like stones cast into still water."
@@ -378,7 +386,11 @@ STAKES: what's at risk
 NPC_INVOLVED: name (motivation)"""
         
         try:
-            response = self.llm.generate_response(prompt)
+            # Check if llm is the interface or the actual LLM
+            if hasattr(self.llm, 'llm'):
+                response = self.llm.llm.generate_response(prompt)
+            else:
+                response = self.llm.generate_response(prompt)
             return self._parse_encounter_response(response)
         except Exception as e:
             if self.fallback_mode:

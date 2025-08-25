@@ -297,6 +297,93 @@ class CombatSystem:
             
         return False, "ongoing"
     
+    def calculate_damage(self, attacker: Combatant, target: Combatant, base_damage: int = None) -> int:
+        """Calculate damage between two combatants"""
+        if base_damage is None:
+            base_damage = attacker.attack + random.randint(1, 6)
+        
+        # Apply target's defense
+        damage_after_defense = max(1, base_damage - target.defense)
+        
+        # Add some randomness (±20%)
+        variance = int(damage_after_defense * 0.2)
+        final_damage = damage_after_defense + random.randint(-variance, variance)
+        
+        return max(1, final_damage)  # Minimum 1 damage
+    
+    def execute_attack(self, attacker: Combatant, target: Combatant, critical_chance: float = 0.1) -> Dict[str, Any]:
+        """Execute a simple attack between two combatants"""
+        if attacker.is_dead or target.is_dead:
+            return {"success": False, "message": "Cannot attack - combatant is dead"}
+        
+        # Calculate hit chance (base 85%)
+        hit_chance = 0.85
+        hit_roll = random.random()
+        
+        if hit_roll > hit_chance:
+            self.log(f"{attacker.name} attacks {target.name} but misses!")
+            return {
+                "success": True,
+                "hit": False,
+                "damage": 0,
+                "critical": False,
+                "message": f"{attacker.name} attacks {target.name} but misses!"
+            }
+        
+        # Calculate damage
+        base_damage = attacker.attack + random.randint(1, 6)
+        
+        # Check for critical hit
+        critical_roll = random.random()
+        is_critical = critical_roll <= critical_chance
+        if is_critical:
+            base_damage *= 2
+        
+        final_damage = self.calculate_damage(attacker, target, base_damage)
+        
+        # Apply damage
+        actual_damage = target.take_damage(final_damage)
+        
+        # Create result message
+        crit_text = " (CRITICAL HIT!)" if is_critical else ""
+        message = f"{attacker.name} attacks {target.name} for {actual_damage} damage{crit_text}"
+        
+        if target.is_dead:
+            message += f" - {target.name} is defeated!"
+        
+        self.log(message)
+        
+        return {
+            "success": True,
+            "hit": True,
+            "damage": actual_damage,
+            "critical": is_critical,
+            "message": message,
+            "target_defeated": target.is_dead
+        }
+    
+    def apply_damage(self, target: Combatant, damage: int, damage_type: DamageType = DamageType.PHYSICAL) -> int:
+        """Apply damage directly to a target"""
+        if target.is_dead:
+            return 0
+        
+        actual_damage = target.take_damage(damage, damage_type)
+        self.log(f"{target.name} takes {actual_damage} {damage_type.value} damage")
+        
+        if target.is_dead:
+            self.log(f"{target.name} is defeated!")
+        
+        return actual_damage
+    
+    def heal_combatant(self, target: Combatant, amount: int) -> int:
+        """Heal a combatant"""
+        if target.is_dead:
+            return 0
+        
+        actual_healing = target.heal(amount)
+        self.log(f"{target.name} is healed for {actual_healing} health")
+        return actual_healing
+    
     def calculate_rewards(self, defeated_enemies: List[Enemy], player_level: int) -> Dict[str, Any]:
         """Calculate experience, gold, and loot rewards"""
         total_exp = 0
@@ -428,12 +515,17 @@ class ExperienceSystem:
             result["benefits"].append(f"Maximum health increased by {health_gained}!")
             result["benefits"].append(f"Health restored by {health_gained}!")
             
-            # Increase other stats
+            # Update combat stats to proper level-based values
+            old_attack = getattr(player, 'attack', 10)
+            old_defense = getattr(player, 'defense', 5)
+            
             if hasattr(player, 'attack'):
-                player.attack += 2
-                result["benefits"].append("Attack power increased!")
+                player.attack = 10 + (new_level * 2)
+                attack_gain = player.attack - old_attack
+                result["benefits"].append(f"Attack power increased by {attack_gain}!")
             if hasattr(player, 'defense'):
-                player.defense += 1
-                result["benefits"].append("Defense improved!")
+                player.defense = 5 + new_level  
+                defense_gain = player.defense - old_defense
+                result["benefits"].append(f"Defense improved by {defense_gain}!")
         
         return result

@@ -13,6 +13,7 @@ class CommandProcessor:
         # Define supported commands and their patterns
         self.commands = {
             "go": r"^(go|move)\s+(north|south|east|west|up|down|n|s|e|w|u|d)\s*$",
+            "direction": r"^(north|south|east|west|up|down|n|s|e|w|u|d)\s*$",
             "look": r"^(look|l)\s*$",
             "inventory": r"^(inventory|i)\s*$",
             "quit": r"^(quit|exit|q)\s*$",
@@ -49,9 +50,13 @@ class CommandProcessor:
         """
         Parse a user command and return appropriate result
         """
+        # Input validation
+        if not user_input:
+            return {"type": "invalid", "message": "Please enter a command."}
+        
         user_input = user_input.strip().lower()
         
-        # Handle empty input
+        # Handle empty input after stripping
         if not user_input:
             return {"type": "invalid", "message": "Please enter a command."}
             
@@ -66,10 +71,16 @@ class CommandProcessor:
             return {"type": "look", "message": "You look around."}
             
         elif re.match(self.commands["inventory"], user_input):
-            return {"type": "inventory", "items": player.inventory}
+            if not player:
+                return {"type": "invalid", "message": "Player not available."}
+            return {"type": "inventory", "items": getattr(player, 'inventory', [])}
             
         elif re.match(self.commands["go"], user_input):
             direction = re.match(self.commands["go"], user_input).group(2)
+            return self._handle_movement(direction, player, world)
+            
+        elif re.match(self.commands["direction"], user_input):
+            direction = re.match(self.commands["direction"], user_input).group(1)
             return self._handle_movement(direction, player, world)
             
         elif re.match(self.commands["take"], user_input):
@@ -179,6 +190,25 @@ class CommandProcessor:
         """
         Handle movement commands with dynamic room generation
         """
+        # Null safety checks
+        if not player:
+            return {
+                "type": "invalid",
+                "message": "Player not found."
+            }
+        
+        if not world:
+            return {
+                "type": "invalid",
+                "message": "World not available."
+            }
+        
+        if not direction:
+            return {
+                "type": "invalid",
+                "message": "No direction specified."
+            }
+        
         # Normalize direction
         direction_map = {
             "north": "north", "south": "south", "east": "east", "west": "west",
@@ -193,6 +223,14 @@ class CommandProcessor:
             }
         
         full_direction = direction_map[direction]
+        
+        # Check player location
+        if not hasattr(player, 'location') or not player.location:
+            return {
+                "type": "invalid",
+                "message": "Your location is unknown."
+            }
+        
         current_room = world.get_room(player.location)
         
         if not current_room:
@@ -213,9 +251,16 @@ class CommandProcessor:
                 "message": f"You can't go {full_direction} from here. There's no passage in that direction."
             }
         
-        # For now, take the first valid destination
-        # In future, could handle multiple paths in same direction
-        new_location = possible_destinations[0]
+        # Parse the connection to get the actual destination room
+        connection = possible_destinations[0]
+        
+        # Connection format is "direction_destination" (e.g., "south_start", "north_2")
+        if "_" in connection:
+            direction_part, destination_part = connection.split("_", 1)
+            new_location = destination_part
+        else:
+            # Fallback: treat the whole connection as destination
+            new_location = connection
         
         # Generate room on demand if it doesn't exist
         if new_location not in world.rooms:

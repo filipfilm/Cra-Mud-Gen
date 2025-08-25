@@ -168,7 +168,11 @@ Generate a brief, atmospheric response (1-2 sentences) that:
 Keep it concise and evocative."""
         
         try:
-            return self.llm.generate_response(prompt).strip()
+            # Check if llm is the interface or the actual LLM
+            if hasattr(self.llm, 'llm'):
+                return self.llm.llm.generate_response(prompt).strip()
+            else:
+                return self.llm.generate_response(prompt).strip()
         except:
             return None
     
@@ -255,7 +259,11 @@ This input is ambiguous. Generate a helpful clarification question that:
 Format as a question with options."""
         
         try:
-            clarification = self.llm.generate_response(prompt)
+            # Check if llm is the interface or the actual LLM
+            if hasattr(self.llm, 'llm'):
+                clarification = self.llm.llm.generate_response(prompt)
+            else:
+                clarification = self.llm.generate_response(prompt)
             return {
                 "type": "clarification_needed", 
                 "message": clarification.strip()

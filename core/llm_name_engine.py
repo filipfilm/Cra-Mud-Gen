@@ -44,7 +44,11 @@ class LLMNameEngine:
         max_retries = 3
         for attempt in range(max_retries):
             try:
-                response = self.llm.generate_response(prompt)
+                # Check if llm is the interface or the actual LLM
+                if hasattr(self.llm, 'llm'):
+                    response = self.llm.llm.generate_response(prompt)
+                else:
+                    response = self.llm.generate_response(prompt)
                 name = self._parse_name_response(response, name_type)
                 if name:  # Valid name generated
                     return name
@@ -100,7 +104,11 @@ Generate just the name, nothing else:"""
         max_retries = 3
         for attempt in range(max_retries):
             try:
-                response = self.llm.generate_response(prompt)
+                # Check if llm is the interface or the actual LLM
+                if hasattr(self.llm, 'llm'):
+                    response = self.llm.llm.generate_response(prompt)
+                else:
+                    response = self.llm.generate_response(prompt)
                 name = response.strip().strip('"').strip("'")
                 if name:  # Valid name generated
                     return name
@@ -152,7 +160,11 @@ Cyberpunk: "Neon District", "Chrome Tower", "The Underground"
 Generate just the location name, nothing else:"""
 
         try:
-            response = self.llm.generate_response(prompt)
+            # Check if llm is the interface or the actual LLM
+            if hasattr(self.llm, 'llm'):
+                response = self.llm.llm.generate_response(prompt)
+            else:
+                response = self.llm.generate_response(prompt)
             return response.strip().strip('"').strip("'")
             
         except Exception as e:
@@ -244,20 +256,13 @@ Generate just the title, nothing else:"""
         return name
     
     def _generate_fallback_name(self, theme: str, role: str, name_type: str) -> str:
-        """Fallback to simple name generation when LLM unavailable"""
-        # Import the old system for fallback
-        from core.generative_name_engine import GenerativeNameEngine
-        fallback_engine = GenerativeNameEngine()
-        return fallback_engine.generate_dynamic_name(theme, role, name_type)
+        """Fallback name generation disabled - LLM generation required"""
+        raise RuntimeError("Fallback name generation disabled - LLM generation required")
     
     def _generate_fallback_item(self, item_type: str, theme: str, rarity: str) -> str:
-        """Fallback item name generation"""
-        from core.generative_name_engine import GenerativeNameEngine
-        fallback_engine = GenerativeNameEngine()
-        return fallback_engine.generate_item_name(item_type, theme, rarity)
+        """Fallback item name generation disabled - LLM generation required"""
+        raise RuntimeError("Fallback item name generation disabled - LLM generation required")
     
     def _generate_fallback_location(self, location_type: str, theme: str) -> str:
-        """Fallback location name generation"""
-        from core.generative_name_engine import GenerativeNameEngine
-        fallback_engine = GenerativeNameEngine()
-        return fallback_engine.generate_location_name(location_type, theme)
+        """Fallback location name generation disabled - LLM generation required"""
+        raise RuntimeError("Fallback location name generation disabled - LLM generation required")

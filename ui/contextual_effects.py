@@ -191,60 +191,8 @@ class ContextualEffects:
                 raise RuntimeError(
                     "LLM is required for contextual effects (fallback mode disabled)"
                 )
-            # Fallback to simple dynamic messages if no LLM
-            fallbacks = {
-                "water": [
-                    "~ Water ripples softly ~",
-                    "~ Liquid reflects light ~",
-                    "~ Moisture glints nearby ~",
-                ],
-                "fire": [
-                    "≈ Heat shimmers in the air ≈",
-                    "≈ Warm light flickers ≈",
-                    "≈ Embers glow softly ≈",
-                ],
-                "lava": [
-                    "≈ Molten currents flow ≈",
-                    "≈ Volcanic heat radiates ≈",
-                    "≈ Liquid rock bubbles ≈",
-                ],
-                "magical": [
-                    "✧ Energy pulses gently ✧",
-                    "✧ Mystical forces stir ✧",
-                    "✧ Power hums quietly ✧",
-                ],
-                "lightning": [
-                    "⚡ Static fills the air ⚡",
-                    "⚡ Electrical energy crackles ⚡",
-                    "⚡ Power surges nearby ⚡",
-                ],
-                "poison": [
-                    "≈ Toxic vapors drift ≈",
-                    "≈ Noxious fumes rise ≈",
-                    "≈ Corruption seeps ≈",
-                ],
-                "shadow": [
-                    "▓ Darkness shifts ▓",
-                    "▓ Shadows dance ▓",
-                    "▓ Gloom deepens ▓",
-                ],
-                "ice": [
-                    "❅ Cold air swirls ❅",
-                    "❅ Frost forms ❅",
-                    "❅ Chill winds blow ❅",
-                ],
-                "smoke": [
-                    "≋ Vapor drifts past ≋",
-                    "≋ Wisps curl upward ≋",
-                    "≋ Haze obscures ≋",
-                ],
-                "aurora": [
-                    "✦ Light patterns shift ✦",
-                    "✦ Colors dance above ✦",
-                    "✦ Radiance flows ✦",
-                ],
-            }
-            return random.choice(fallbacks.get(effect_type, ["~ Something stirs ~"]))
+            # No fallback - LLM required
+            raise RuntimeError("LLM is required for contextual effects (fallback mode disabled)")
 
         prompt = f"""Create a short atmospheric effect message for a {theme} setting.
 
@@ -294,20 +242,8 @@ Keep it evocative and thematic. Only return the formatted message."""
                 raise RuntimeError(
                     f"LLM contextual effect generation failed and fallback mode disabled: {e}"
                 )
-            # Fallback if LLM fails
-            fallbacks = {
-                "water": "~ Water ripples softly ~",
-                "fire": "≈ Flames dance nearby ≈",
-                "lava": "≈ Molten rock flows ≈",
-                "magical": "✧ Mystical energy swirls ✧",
-                "lightning": "⚡ Energy crackles ⚡",
-                "poison": "≈ Toxic vapors rise ≈",
-                "shadow": "▓ Darkness shifts ▓",
-                "ice": "❅ Frost gathers ❅",
-                "smoke": "≋ Mist swirls ≋",
-                "aurora": "✦ Light dances ✦",
-            }
-            return fallbacks.get(effect_type, "~ Something stirs ~")
+            # No fallback - LLM required  
+            raise RuntimeError(f"LLM contextual effect generation failed and fallback mode disabled: {e}")
 
     @staticmethod
     def apply_item_effect(
@@ -403,7 +339,7 @@ Keep it evocative and thematic. Only return the formatted message."""
         if not llm:
             if not fallback_mode:
                 raise RuntimeError(
-                    "LLM is required for item effects (fallback mode disabled)"
+                    "LLM is required for contextual effects (fallback mode disabled)"
                 )
             templates = {
                 "legendary": f"✧ The {item_name} radiates power ✧",

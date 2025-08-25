@@ -515,16 +515,8 @@ Write 6-8 complete sentences. Ensure each sentence is fully finished without cut
         elif iteration == 1:
             # Enhanced story with complexity
             seed.conflict = response
-            # Extract potential story beats from sentences
-            sentences = [s.strip() for s in response.split('.') if s.strip()]
-            if len(sentences) >= 3:
-                # Create numbered story beats
-                seed.story_beats = []
-                for i, sentence in enumerate(sentences[:5]):
-                    # Clean up sentence and make it a proper story beat
-                    clean_sentence = sentence.strip().rstrip('.,!?')
-                    if clean_sentence and len(clean_sentence) > 10:  # Only meaningful sentences
-                        seed.story_beats.append(clean_sentence)
+            # Generate actionable story progression separately
+            seed.story_beats = self._generate_story_progression(seed)
         
         else:  # iteration == 2
             # Final detailed story
@@ -602,6 +594,177 @@ Write 6-8 complete sentences. Ensure each sentence is fully finished without cut
                 issues.append(f"Invalid {attr}: {value} (should be 1-10)")
         
         return len(issues) == 0, issues
+    
+    def _generate_story_progression(self, seed: StorySeed) -> List[str]:
+        """
+        Generate meaningful story progression beats that serve actual gameplay purposes
+        """
+        if not self.llm_interface:
+            raise ValueError("LLM interface is required for story progression generation")
+        
+        # Try LLM generation with fallback
+        try:
+            prompt = f"""Create 5 actionable story progression beats for a {seed.theme} adventure.
+
+Setting: {seed.setting}
+Danger Level: {seed.danger_level}/10
+Mystery Level: {seed.mystery_level}/10
+Discovery Factor: {seed.discovery_factor}/10
+
+Requirements:
+- Each beat should be a specific, actionable objective or challenge
+- Progression should escalate in difficulty and stakes
+- Include concrete goals like "find X", "defeat Y", "solve Z puzzle"
+- Avoid vague atmospheric descriptions
+- Focus on what the player needs to DO, not just what they see
+- Each beat should lead logically to the next
+
+Format as numbered list. Examples:
+1. Locate the ancient key hidden in the eastern chambers
+2. Solve the riddle of the three stone guardians
+3. Navigate through the maze of mirrors without triggering traps
+4. Confront and defeat the corrupted guardian of the inner sanctum
+5. Retrieve the artifact and escape before the temple collapses
+
+Generate 5 progression beats now:"""
+
+            response = self.llm_interface.llm.generate_long_content(prompt, {"theme": seed.theme}, max_tokens=600)
+            
+            # Check for LLM error responses
+            error_indicators = [
+                "narrative threads take time", "storytelling forces", "creative energies",
+                "ancient magic remains silent", "mystical energies", "forces stir but remain"
+            ]
+            
+            is_error_response = any(indicator in response.lower() for indicator in error_indicators)
+            
+            if is_error_response or len(response.strip()) < 50:
+                # LLM failed, use fallback
+                return self._generate_fallback_progression(seed)
+            
+            # Parse the numbered list
+            beats = []
+            lines = response.strip().split('\n')
+            for line in lines:
+                line = line.strip()
+                if line and (line[0].isdigit() or line.startswith('-') or line.startswith('•')):
+                    # Remove numbering and clean up
+                    clean_beat = line.split('.', 1)[-1].strip()
+                    if self._is_valid_story_beat(clean_beat, beats):
+                        beats.append(clean_beat)
+            
+            # Require sufficient beats
+            if len(beats) >= 3:  # Accept if we got at least 3 good beats
+                return beats[:5]
+            else:
+                # Not enough valid beats found, use fallback
+                return self._generate_fallback_progression(seed)
+                    
+        except Exception as e:
+            # Any other error, use fallback
+            return self._generate_fallback_progression(seed)
+    
+    def _generate_fallback_progression(self, seed: StorySeed) -> List[str]:
+        """
+        Generate basic fallback story progression when LLM is unavailable or fails
+        """
+        theme_progressions = {
+            'fantasy': [
+                f"Explore the entrance to {seed.setting}",
+                f"Find a way to overcome the first guardian or obstacle",
+                f"Solve a puzzle or riddle to progress deeper",
+                f"Confront the main challenge or boss enemy",
+                f"Complete the quest and escape safely"
+            ],
+            'sci-fi': [
+                f"Access the {seed.setting} facility",
+                f"Navigate through security systems and defenses",
+                f"Locate and activate key systems or terminals",
+                f"Battle or evade hostile forces or AI",
+                f"Complete the mission and extract successfully"
+            ],
+            'horror': [
+                f"Enter the cursed {seed.setting}",
+                f"Survive the first supernatural encounter",
+                f"Uncover clues about the dark history",
+                f"Face the source of evil or terror",
+                f"Escape before becoming trapped forever"
+            ],
+            'cyberpunk': [
+                f"Infiltrate the {seed.setting} complex",
+                f"Hack through digital security barriers",
+                f"Gather critical data or disable systems",
+                f"Evade corporate security forces",
+                f"Complete the run and disappear into the network"
+            ]
+        }
+        
+        base_progression = theme_progressions.get(seed.theme, theme_progressions['fantasy'])
+        
+        # Customize based on danger level
+        if seed.danger_level >= 7:
+            base_progression[3] = base_progression[3].replace("Confront the main challenge", "Battle through multiple dangerous challenges")
+        elif seed.danger_level <= 3:
+            base_progression[3] = base_progression[3].replace("Confront", "Carefully approach")
+            
+        return base_progression
+    
+    def _is_valid_story_beat(self, beat: str, existing_beats: List[str]) -> bool:
+        """
+        Validate that a story beat is meaningful and unique
+        """
+        if not beat or len(beat) < 15:
+            return False
+        
+        # Check for actionable verbs
+        actionable_verbs = [
+            "find", "locate", "discover", "collect", "gather", "retrieve",
+            "solve", "decode", "decipher", "unlock", "activate", "repair",
+            "defeat", "confront", "battle", "survive", "escape", "evade",
+            "navigate", "traverse", "explore", "investigate", "search",
+            "protect", "defend", "rescue", "deliver", "obtain", "acquire"
+        ]
+        
+        beat_lower = beat.lower()
+        has_action = any(verb in beat_lower for verb in actionable_verbs)
+        
+        if not has_action:
+            return False
+        
+        # Check for purely vague/atmospheric words that indicate description rather than action
+        # Only reject beats that are PRIMARILY descriptive, not those that use atmospheric language
+        purely_descriptive_phrases = [
+            "you see", "you notice", "you feel", "you hear", "you sense",
+            "the air is", "the atmosphere", "feeling of", "sense of"
+        ]
+        
+        is_purely_descriptive = any(phrase in beat_lower for phrase in purely_descriptive_phrases)
+        
+        # Additional check: if the beat contains actionable verbs but also descriptive language,
+        # allow it if it has more action than description
+        if is_purely_descriptive:
+            return False
+        
+        # Check for uniqueness (avoid similar beats)
+        for existing in existing_beats:
+            similarity = self._calculate_similarity(beat.lower(), existing.lower())
+            if similarity > 0.7:  # Too similar
+                return False
+        
+        return True
+    
+    def _calculate_similarity(self, text1: str, text2: str) -> float:
+        """Calculate simple similarity between two text strings"""
+        words1 = set(text1.split())
+        words2 = set(text2.split())
+        
+        if not words1 or not words2:
+            return 0.0
+        
+        intersection = len(words1.intersection(words2))
+        union = len(words1.union(words2))
+        
+        return intersection / union if union > 0 else 0.0
     
     def export_seed(self, seed: StorySeed, filepath: str) -> bool:
         """

@@ -30,7 +30,11 @@ class DynamicContentGenerator:
         prompt = self._create_content_prompt(room_description, theme, depth, narrative_context)
         
         try:
-            response = self.llm.generate_response(prompt)
+            # Check if llm is the interface or the actual LLM
+            if hasattr(self.llm, 'llm'):
+                response = self.llm.llm.generate_response(prompt)
+            else:
+                response = self.llm.generate_response(prompt)
             return self._parse_llm_response(response, theme)
         except Exception as e:
             print(f"LLM generation failed: {e}")
@@ -179,69 +183,9 @@ NPC_PROFILES:
         return content
     
     def _fallback_generation(self, room_description: str, theme: str, depth: int, narrative_context: Dict = None) -> Dict[str, Any]:
-        """Fallback content generation when LLM fails"""
-        content = {
-            "items": [],
-            "npcs": [],
-            "item_descriptions": {},
-            "npc_dialogues": {}
-        }
-        
-        # Generate dynamic items
-        item_types = {
-            "fantasy": ["weapon", "armor", "potion", "scroll"],
-            "sci-fi": ["tech", "weapon", "armor", "consumable"],
-            "horror": ["artifact", "weapon", "consumable"],
-            "cyberpunk": ["tech", "software", "weapon"]
-        }
-        
-        available_types = item_types.get(theme, item_types["fantasy"])
-        num_items = min(4, max(1, depth // 3 + random.randint(0, 2)))
-        
-        # Generate unique item names
-        content["items"] = []
-        for _ in range(num_items):
-            item_type = random.choice(available_types)
-            rarity = "common" if depth < 5 else "uncommon" if depth < 10 else "rare"
-            item_name = self.name_generator.generate_item_name(item_type, theme, rarity)
-            content["items"].append(item_name)
-        
-        # Simple descriptions
-        for item in content["items"]:
-            content["item_descriptions"][item] = f"A {item} that looks useful for your adventure."
-        
-        # Occasional NPC - now dynamically generated
-        if random.random() < 0.3:
-            # Define roles by theme
-            theme_roles = {
-                "fantasy": ["warrior", "guard", "scholar", "trader", "priest", "healer", "blacksmith", "wizard"],
-                "sci-fi": ["guard", "engineer", "scientist", "pilot", "medic", "hacker", "operative"],
-                "horror": ["survivor", "cultist", "priest", "doctor", "scholar"],
-                "cyberpunk": ["hacker", "guard", "executive", "engineer", "runner", "operative"]
-            }
-            
-            roles = theme_roles.get(theme, theme_roles["fantasy"])
-            npc_role = random.choice(roles)
-            
-            # Generate dynamic name
-            npc_name = self.name_generator.generate_dynamic_name(theme, npc_role, "full")
-            
-            content["npcs"] = [{"name": npc_name, "role": npc_role}]
-            
-            # Generate dynamic personality traits
-            personality_traits = self._generate_personality_traits(theme, npc_role)
-            speech_pattern = self._get_speech_pattern(theme, npc_role)
-            
-            content["npc_dialogues"][npc_name] = {
-                "personality_traits": personality_traits,
-                "speech_pattern": speech_pattern,
-                "background": f"A {npc_role} who has made these {self._get_area_descriptor(theme)} their domain.",
-                "greeting": self._generate_dynamic_greeting(npc_name, npc_role, theme),
-                "farewell": self._generate_dynamic_farewell(npc_role, theme)
-            }
-        
-        return content
-    
+        """Fallback generation disabled - LLM generation required"""
+        raise RuntimeError("Fallback content generation disabled - LLM generation required")
+
     def get_item_description(self, item_name: str, theme: str) -> str:
         """Get detailed description of an item"""
         if item_name in self.generated_items:
@@ -263,7 +207,11 @@ Write a vivid, atmospheric description (2-3 sentences) that includes:
 Keep it immersive and thematic for {theme} setting."""
         
         try:
-            description = self.llm.generate_response(prompt)
+            # Check if llm is the interface or the actual LLM
+            if hasattr(self.llm, 'llm'):
+                description = self.llm.llm.generate_response(prompt)
+            else:
+                description = self.llm.generate_response(prompt)
             self.generated_items[item_name] = description.strip()
             return description.strip()
         except Exception as e:
@@ -323,7 +271,11 @@ PERSONALITY: brief description of their speaking style/personality
 Make them feel authentic to their role and the {theme} theme.{context_addition}"""
         
         try:
-            response = self.llm.generate_response(prompt)
+            # Check if llm is the interface or the actual LLM
+            if hasattr(self.llm, 'llm'):
+                response = self.llm.llm.generate_response(prompt)
+            else:
+                response = self.llm.generate_response(prompt)
             personality = self._parse_npc_personality(response)
             self.generated_npcs[npc_name] = personality
             return personality

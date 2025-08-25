@@ -15,6 +15,10 @@ class OllamaLLM:
         self.base_url = base_url
         self.is_model_loaded = self._check_model_availability()
         
+        # Warm up the model on initialization
+        if self.is_model_loaded:
+            self._warmup_model()
+        
     def _check_model_availability(self) -> bool:
         """
         Check if Ollama is running and the selected model is available
@@ -38,6 +42,35 @@ class OllamaLLM:
         except:
             print("✗ Ollama not running. Start with: ollama serve")
             return False
+    
+    def _warmup_model(self) -> None:
+        """
+        Warm up the model with a simple hello world test to reduce first-generation latency
+        """
+        print("🔥 Warming up the AI model...")
+        try:
+            # Simple warmup query
+            response = requests.post(
+                f"{self.base_url}/api/generate",
+                json={
+                    "model": self.model_name,
+                    "prompt": "Hello",
+                    "stream": False,
+                    "options": {
+                        "temperature": 0.7,
+                        "num_predict": 10  # Very short response
+                    }
+                },
+                timeout=10
+            )
+            
+            if response.status_code == 200:
+                print("✅ Model warmed up and ready!")
+            else:
+                print("⚠️  Warmup completed with minor issues")
+                
+        except Exception:
+            print("⚠️  Warmup skipped (model will load on first use)")
     
     @staticmethod
     def get_available_models(base_url: str = "http://localhost:11434") -> List[Dict]:
@@ -188,6 +221,59 @@ class OllamaLLM:
         context = {"theme": theme}
         prompt = f"Describe finding or examining a {item} in a {theme} setting"
         return self.generate_response(prompt, context)
+    
+    def generate_game_response(self, prompt: str, context: Dict[str, Any] = None) -> str:
+        """
+        Alias for generate_response to maintain compatibility with game engine
+        """
+        return self.generate_response(prompt, context)
+    
+    def generate_long_content(self, prompt: str, context: Dict[str, Any] = None, max_tokens: int = 800) -> str:
+        """
+        Generate longer content like story progression with extended token limits
+        """
+        if not self.is_available():
+            return "The ancient magic remains silent..."
+        
+        try:
+            theme = context.get("theme", "fantasy") if context else "fantasy"
+            
+            # Minimal system message for better content generation
+            system_message = f"You are a creative writer for {theme} adventures. Generate clear, actionable content as requested."
+            
+            response = requests.post(
+                f"{self.base_url}/api/generate",
+                json={
+                    "model": self.model_name,
+                    "prompt": f"{system_message}\n\n{prompt}",
+                    "stream": False,
+                    "options": {
+                        "temperature": 0.75,
+                        "top_p": 0.9,
+                        "top_k": 40,
+                        "num_predict": max_tokens,
+                        "stop": []  # No early stopping for long content
+                    }
+                },
+                timeout=45
+            )
+            
+            if response.status_code == 200:
+                result = response.json()
+                generated_text = result.get("response", "").strip()
+                
+                if generated_text:
+                    return generated_text
+                else:
+                    return "The creative energies remain dormant..."
+            else:
+                return "The storytelling magic flickers..."
+                
+        except requests.exceptions.Timeout:
+            return "The narrative threads take time to weave..."
+        except Exception as e:
+            print(f"Error with long content generation: {e}")
+            return "The storytelling forces waver..."
     
     def generate_ascii_art(self, subject: str, theme: str, art_type: str = "banner") -> str:
         """
