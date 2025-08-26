@@ -2,6 +2,7 @@
 LLM Interface for Cra-mud-gen - connects to local language models
 """
 import json
+import os
 from typing import Dict, Any, Optional
 from abc import ABC, abstractmethod
 
@@ -11,6 +12,13 @@ try:
     OLLAMA_AVAILABLE = True
 except ImportError:
     OLLAMA_AVAILABLE = False
+
+# Import OpenAI implementation
+try:
+    from .openai_llm import OpenAILLM
+    OPENAI_AVAILABLE = True
+except ImportError:
+    OPENAI_AVAILABLE = False
 
 class LLMInterface(ABC):
     """
@@ -111,8 +119,40 @@ class LLMIntegrationLayer:
     Integration layer that manages LLM connections and responses
     """
     
-    def __init__(self, model_name: str = None):
-        # Try to use Ollama with the specified model, fallback to mock
+    def __init__(self, model_name: str = None, llm_type: str = "auto", api_key: str = None):
+        self.context_manager = {}
+        
+        # Initialize LLM based on model_name format or explicit type
+        if model_name and model_name.startswith("gpt-"):
+            # OpenAI model detected
+            self._init_openai_llm(model_name, api_key)
+        elif llm_type == "openai":
+            # Explicitly requested OpenAI
+            self._init_openai_llm(model_name or "gpt-3.5-turbo", api_key)
+        else:
+            # Try Ollama first (existing behavior)
+            self._init_ollama_llm(model_name)
+    
+    def _init_openai_llm(self, model_name: str, api_key: str = None):
+        """Initialize OpenAI LLM"""
+        if OPENAI_AVAILABLE:
+            try:
+                openai_llm = OpenAILLM(model_name=model_name, api_key=api_key)
+                if openai_llm.is_available():
+                    self.llm = openai_llm
+                    print("✓ Using OpenAI for AI responses")
+                else:
+                    self.llm = MockLLM()
+                    print("⚠ OpenAI not available, using mock responses")
+            except Exception as e:
+                self.llm = MockLLM()
+                print(f"⚠ Failed to initialize OpenAI: {e}, using mock responses")
+        else:
+            self.llm = MockLLM()
+            print("⚠ OpenAI module not found, using mock responses")
+    
+    def _init_ollama_llm(self, model_name: str = None):
+        """Initialize Ollama LLM (existing behavior)"""
         if OLLAMA_AVAILABLE:
             try:
                 if model_name:
@@ -133,13 +173,21 @@ class LLMIntegrationLayer:
             self.llm = MockLLM()
             print("⚠ Ollama module not found, using mock responses")
         
-        self.context_manager = {}
-        
-    def set_llm(self, llm_type: str = "auto", model_path: Optional[str] = None):
+    def set_llm(self, llm_type: str = "auto", model_path: Optional[str] = None, api_key: str = None):
         """
         Set the LLM to use for responses
         """
-        if llm_type.lower() == "ollama" and OLLAMA_AVAILABLE:
+        if llm_type.lower() == "openai" and OPENAI_AVAILABLE:
+            try:
+                openai_llm = OpenAILLM(model_name=model_path or "gpt-3.5-turbo", api_key=api_key)
+                if openai_llm.is_available():
+                    self.llm = openai_llm
+                    print("✓ Switched to OpenAI for AI responses")
+                else:
+                    print("✗ OpenAI not available, keeping current LLM")
+            except Exception as e:
+                print(f"✗ Failed to initialize OpenAI: {e}")
+        elif llm_type.lower() == "ollama" and OLLAMA_AVAILABLE:
             try:
                 ollama_llm = OllamaLLM()
                 if ollama_llm.is_available():
@@ -161,6 +209,16 @@ class LLMIntegrationLayer:
                     if ollama_llm.is_available():
                         self.llm = ollama_llm
                         print("✓ Auto-selected Ollama for AI responses")
+                        return
+                except Exception:
+                    pass
+            # Try OpenAI if available and has API key
+            if OPENAI_AVAILABLE and (api_key or os.getenv("OPENAI_API_KEY")):
+                try:
+                    openai_llm = OpenAILLM(api_key=api_key)
+                    if openai_llm.is_available():
+                        self.llm = openai_llm
+                        print("✓ Auto-selected OpenAI for AI responses")
                         return
                 except Exception:
                     pass

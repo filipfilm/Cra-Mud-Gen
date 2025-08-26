@@ -11,28 +11,15 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 def _select_model():
     """
-    Let user select which Ollama model to use
+    Let user select which AI model to use (Ollama or OpenAI)
     """
     try:
-        # Import here to handle potential import errors gracefully
-        from llm.ollama_llm import OllamaLLM
         from ui.terminal_ui import TerminalUI
         
         ui = TerminalUI()
-        available_models = OllamaLLM.get_available_models()
-        if available_models:
-            return ui.get_model_selection(available_models)
-        else:
-            print("\n❌ No Ollama models found!")
-            print("Please install a model first. Popular options:")
-            print("  • ollama pull mistral           (7B - Good for storytelling)")
-            print("  • ollama pull llama3.1          (8B - Great general purpose)")
-            print("  • ollama pull gemma2:2b         (2B - Fast and lightweight)")
-            print("\nAfter installing a model, restart the game.")
-            sys.exit(0)
+        return ui.get_ai_model_selection()
     except Exception as e:
-        print(f"❌ Error connecting to Ollama: {e}")
-        print("Make sure Ollama is running: ollama serve")
+        print(f"❌ Error during model selection: {e}")
         sys.exit(0)
 
 def main():
@@ -53,10 +40,19 @@ def main():
         
         print("Starting Cra-mud-gen...")
         
-        # Step 1: Select LLM model first
-        print("Selecting LLM model...")
-        selected_model = _select_model()
-        llm_interface = LLMIntegrationLayer(model_name=selected_model)
+        # Step 1: Select AI model first
+        print("Selecting AI model...")
+        model_info = _select_model()
+        
+        # Extract model info and create LLM interface
+        if isinstance(model_info, dict):
+            model_name = model_info.get("name")
+            llm_type = model_info.get("type", "auto")
+            api_key = model_info.get("api_key")
+            llm_interface = LLMIntegrationLayer(model_name=model_name, llm_type=llm_type, api_key=api_key)
+        else:
+            # Backward compatibility - assume it's just a model name
+            llm_interface = LLMIntegrationLayer(model_name=model_info)
         
         # Step 2: Initialize seed generation UI with LLM
         seed_ui = SeedUI(llm_interface=llm_interface, fallback_mode=args.fallback_mode)

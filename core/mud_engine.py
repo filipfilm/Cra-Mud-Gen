@@ -47,8 +47,15 @@ class GameEngine:
             self.llm = llm_interface
         else:
             # Fallback to old behavior for backward compatibility
-            selected_model = self._select_model()
-            self.llm = LLMIntegrationLayer(model_name=selected_model)
+            model_info = self._select_model()
+            if isinstance(model_info, dict):
+                model_name = model_info.get("name")
+                llm_type = model_info.get("type", "auto")
+                api_key = model_info.get("api_key")
+                self.llm = LLMIntegrationLayer(model_name=model_name, llm_type=llm_type, api_key=api_key)
+            else:
+                # Backward compatibility
+                self.llm = LLMIntegrationLayer(model_name=model_info)
         
         self.world = World(self.context_manager, self.llm, fallback_mode=fallback_mode)  # Pass LLM to world for ASCII art
         self.command_processor = CommandProcessor()
@@ -108,29 +115,11 @@ class GameEngine:
         # Display control
         self.suppress_room_display = False
     
-    def _select_model(self) -> str:
+    def _select_model(self):
         """
-        Let user select which Ollama model to use
+        Let user select which AI model to use (Ollama or OpenAI)
         """
-        # Import here to avoid circular imports
-        from llm.ollama_llm import OllamaLLM
-        
-        try:
-            available_models = OllamaLLM.get_available_models()
-            if available_models:
-                return self.ui.get_model_selection(available_models)
-            else:
-                print("\n❌ No Ollama models found!")
-                print("Please install a model first. Popular options:")
-                print("  • ollama pull mistral           (7B - Good for storytelling)")
-                print("  • ollama pull llama3.1          (8B - Great general purpose)")
-                print("  • ollama pull gemma2:2b         (2B - Fast and lightweight)")
-                print("\nAfter installing a model, restart the game.")
-                sys.exit(0)
-        except Exception as e:
-            print(f"❌ Error connecting to Ollama: {e}")
-            print("Make sure Ollama is running: ollama serve")
-            sys.exit(0)
+        return self.ui.get_ai_model_selection()
         
     def run(self):
         """

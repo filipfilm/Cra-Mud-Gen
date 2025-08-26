@@ -2,7 +2,7 @@
 ASCII Map System for Cra-mud-gen
 Tracks player movement and generates text-based maps
 """
-from typing import Dict, List, Tuple, Set
+from typing import Dict, List, Tuple, Set, Optional
 import re
 
 class Room:
@@ -109,25 +109,47 @@ class MapSystem:
             return (0, 0)
         
         old_x, old_y = self.room_coordinates[old_room_id]
+        direction = None
         
-        # Parse direction from room ID (e.g., "north_2" -> "north")
+        # Parse direction from room ID - handle multiple formats
         if "_" in new_room_id:
+            # Format like "north_2" or "n1_s2" -> use first part
             direction = new_room_id.split("_")[0]
         else:
+            # Handle compact format like "w1", "e2", "n1s2", etc.
+            direction = self._extract_primary_direction(new_room_id)
+        
+        if not direction:
             return (old_x, old_y)  # Fallback to same position
         
         # Calculate new position based on direction
         direction_offsets = {
-            "north": (0, -1),
-            "south": (0, 1),
-            "east": (1, 0),
-            "west": (-1, 0),
-            "up": (0, 0),    # Same horizontal position
-            "down": (0, 0)   # Same horizontal position
+            "north": (0, -1), "n": (0, -1),
+            "south": (0, 1), "s": (0, 1), 
+            "east": (1, 0), "e": (1, 0),
+            "west": (-1, 0), "w": (-1, 0),
+            "up": (0, 0), "u": (0, 0),    # Same horizontal position
+            "down": (0, 0), "d": (0, 0)   # Same horizontal position
         }
         
         dx, dy = direction_offsets.get(direction, (0, 0))
         return (old_x + dx, old_y + dy)
+    
+    def _extract_primary_direction(self, room_id: str) -> Optional[str]:
+        """Extract the primary direction from compact room IDs like 'w1', 'e2', 'n1s2'"""
+        import re
+        
+        # Look for direction letters at the start
+        match = re.match(r'^([nsewud])', room_id.lower())
+        if match:
+            return match.group(1)
+        
+        # Handle multi-directional IDs by taking the first direction found
+        directions_found = re.findall(r'([nsewud])\d*', room_id.lower())
+        if directions_found:
+            return directions_found[0]
+        
+        return None
     
     def discover_room_exits(self, room_id: str, connections: List[str]):
         """Discover potential exits from a room using connection strings"""
@@ -293,9 +315,10 @@ class MapSystem:
         if hasattr(player, 'location') and player.location:
             self.player_location = player.location
             
-            # Ensure player location is in our rooms
+            # Ensure player location is in our rooms - try to get position from spatial navigator first
             if player.location not in self.rooms:
-                self.add_room(player.location, 0, 0)
+                x, y = self._get_room_position_from_world(player.location, world)
+                self.add_room(player.location, x, y)
             
             self.mark_visited(player.location)
         
@@ -303,8 +326,8 @@ class MapSystem:
         if hasattr(player, 'visited_rooms'):
             for room_id in player.visited_rooms:
                 if room_id not in self.rooms:
-                    # Try to calculate position based on room name
-                    x, y = self._calculate_room_position(room_id, self.player_location)
+                    # Try to get position from spatial navigator, fallback to calculation
+                    x, y = self._get_room_position_from_world(room_id, world)
                     self.add_room(room_id, x, y)
                 self.mark_visited(room_id)
         
@@ -313,3 +336,17 @@ class MapSystem:
             for room_id, world_room in world.rooms.items():
                 if hasattr(world_room, 'connections') and room_id in self.rooms:
                     self.discover_room_exits(room_id, world_room.connections)
+    
+    def _get_room_position_from_world(self, room_id: str, world) -> Tuple[int, int]:
+        """Get room position from world's spatial navigator, with fallback to calculation"""
+        # Try to get from spatial navigator first
+        if hasattr(world, 'spatial_navigator') and hasattr(world.spatial_navigator, 'room_positions'):
+            if room_id in world.spatial_navigator.room_positions:
+                pos = world.spatial_navigator.room_positions[room_id]
+                return (pos[0], pos[1])  # Use x,y and ignore z
+        
+        # Fallback to calculation based on room ID
+        if self.player_location and self.player_location in self.room_coordinates:
+            return self._calculate_room_position(room_id, self.player_location)
+        
+        return (0, 0)  # Final fallback

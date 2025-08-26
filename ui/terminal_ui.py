@@ -238,6 +238,160 @@ class TerminalUI:
         """
         print(help_text)
     
+    def get_ai_model_selection(self) -> Dict[str, Any]:
+        """
+        Display available AI providers and get user selection
+        """
+        print(f"\n{Colors.BRIGHT_CYAN}{'=' * 60}{Colors.RESET}")
+        brain_title = Effects.neon_glow("🤖 SELECT AI PROVIDER", 0, 255, 255)
+        print(f"           {brain_title}")
+        print(f"{Colors.BRIGHT_CYAN}{'=' * 60}{Colors.RESET}")
+        print(f"{Colors.GLOW_YELLOW}Choose your AI assistant for the adventure:{Colors.RESET}\n")
+        
+        options = [
+            {"name": "Local Ollama Models", "desc": "Use local AI models (free, private)", "type": "ollama"},
+            {"name": "OpenAI ChatGPT", "desc": "Use OpenAI's GPT models (requires API key)", "type": "openai"},
+        ]
+        
+        for i, option in enumerate(options, 1):
+            print(f"{Colors.BRIGHT_CYAN}{i:2d}.{Colors.RESET} {Colors.GLOW_GREEN}{option['name']:<25}{Colors.RESET}")
+            print(f"    {Colors.DIM}{option['desc']}{Colors.RESET}")
+            print()
+        
+        print(f"{Colors.BRIGHT_CYAN}{'=' * 60}{Colors.RESET}")
+        
+        while True:
+            try:
+                choice = input(f"{Colors.BRIGHT_MAGENTA}Select AI provider (1-{len(options)}): {Colors.RESET}").strip()
+                
+                if not choice:
+                    continue
+                    
+                index = int(choice) - 1
+                if 0 <= index < len(options):
+                    selected_option = options[index]
+                    
+                    if selected_option["type"] == "ollama":
+                        return self._select_ollama_model()
+                    elif selected_option["type"] == "openai":
+                        return self._select_openai_model()
+                else:
+                    print(f"{Colors.BRIGHT_RED}Please enter a number between 1 and {len(options)}{Colors.RESET}")
+                    
+            except ValueError:
+                print(f"{Colors.BRIGHT_RED}Please enter a valid number{Colors.RESET}")
+            except KeyboardInterrupt:
+                print(f"\n\n{Colors.GLOW_CYAN}Goodbye!{Colors.RESET}")
+                sys.exit(0)
+    
+    def _select_ollama_model(self) -> Dict[str, Any]:
+        """
+        Select from available Ollama models
+        """
+        try:
+            from llm.ollama_llm import OllamaLLM
+            available_models = OllamaLLM.get_available_models()
+            
+            if not available_models:
+                print("\n❌ No Ollama models found!")
+                print("Please install a model first. Popular options:")
+                print("  • ollama pull mistral           (7B - Good for storytelling)")
+                print("  • ollama pull llama3.1          (8B - Great general purpose)")
+                print("  • ollama pull gemma2:2b         (2B - Fast and lightweight)")
+                print("\nAfter installing a model, restart the game.")
+                sys.exit(0)
+            
+            model_name = self.get_model_selection(available_models)
+            return {"name": model_name, "type": "ollama"}
+        except Exception as e:
+            print(f"❌ Error with Ollama: {e}")
+            print("Make sure Ollama is running: ollama serve")
+            sys.exit(0)
+    
+    def _select_openai_model(self) -> Dict[str, Any]:
+        """
+        Select OpenAI model and get API key
+        """
+        try:
+            from llm.openai_llm import OpenAILLM
+            import os
+            
+            # Check if API key exists in environment
+            existing_key = os.getenv("OPENAI_API_KEY")
+            api_key = None
+            
+            if existing_key:
+                print(f"\n{Colors.GLOW_GREEN}✓ Found existing OpenAI API key in environment{Colors.RESET}")
+                use_existing = input(f"{Colors.BRIGHT_MAGENTA}Use existing key? (y/n): {Colors.RESET}").strip().lower()
+                if use_existing in ['y', 'yes', '']:
+                    api_key = existing_key
+            
+            if not api_key:
+                print(f"\n{Colors.BRIGHT_YELLOW}🔑 OpenAI API Key Required{Colors.RESET}")
+                print(f"{Colors.DIM}Get your key from: https://platform.openai.com/api-keys{Colors.RESET}")
+                api_key = input(f"{Colors.BRIGHT_MAGENTA}Enter your OpenAI API key: {Colors.RESET}").strip()
+                
+                if not api_key:
+                    print(f"{Colors.BRIGHT_RED}API key is required for OpenAI models{Colors.RESET}")
+                    sys.exit(0)
+            
+            # Show available OpenAI models
+            available_models = OpenAILLM.get_available_models()
+            
+            print(f"\n{Colors.BRIGHT_CYAN}{'=' * 60}{Colors.RESET}")
+            print(f"           {Colors.GLOW_CYAN}📡 OPENAI MODELS{Colors.RESET}")
+            print(f"{Colors.BRIGHT_CYAN}{'=' * 60}{Colors.RESET}")
+            print(f"{Colors.GLOW_YELLOW}Available OpenAI models:{Colors.RESET}\n")
+            
+            for i, model in enumerate(available_models, 1):
+                if model.get("recommended", False):
+                    status = f"{Colors.GLOW_YELLOW}⭐ RECOMMENDED{Colors.RESET}"
+                    name_color = Colors.GLOW_GREEN
+                else:
+                    status = f"{Colors.DIM}  Available{Colors.RESET}"
+                    name_color = Colors.BRIGHT_WHITE
+                    
+                print(f"{Colors.BRIGHT_CYAN}{i:2d}.{Colors.RESET} {name_color}{model['name']:<20}{Colors.RESET} " +
+                      f"{Colors.DIM}({model['cost']:<10}){Colors.RESET} {status}")
+                print(f"    {Colors.DIM}{model['description']}{Colors.RESET}")
+                print()
+            
+            print(f"{Colors.BRIGHT_CYAN}{'=' * 60}{Colors.RESET}")
+            
+            while True:
+                try:
+                    choice = input(f"{Colors.BRIGHT_MAGENTA}Select model (1-{len(available_models)}): {Colors.RESET}").strip()
+                    
+                    if not choice:
+                        continue
+                        
+                    index = int(choice) - 1
+                    if 0 <= index < len(available_models):
+                        selected_model = available_models[index]
+                        model_name = selected_model['name']
+                        
+                        print(f"\n{Colors.GLOW_GREEN}✓ Selected: {Colors.BRIGHT_WHITE}{model_name}{Colors.RESET}")
+                        if selected_model.get("recommended", False):
+                            print(f"  {Colors.BRIGHT_MAGENTA}Great choice for adventures! 🎮{Colors.RESET}")
+                        else:
+                            print(f"  {Colors.BRIGHT_YELLOW}Advanced model - enjoy the enhanced experience! 🚀{Colors.RESET}")
+                        
+                        # Brief loading animation
+                        StatusBar.loading_animation("Connecting to OpenAI", 1.5)
+                        
+                        return {"name": model_name, "type": "openai", "api_key": api_key}
+                    else:
+                        print(f"{Colors.BRIGHT_RED}Please enter a number between 1 and {len(available_models)}{Colors.RESET}")
+                        
+                except ValueError:
+                    print(f"{Colors.BRIGHT_RED}Please enter a valid number{Colors.RESET}")
+                except KeyboardInterrupt:
+                    print(f"\n\n{Colors.GLOW_CYAN}Goodbye!{Colors.RESET}")
+                    sys.exit(0)
+        except Exception as e:
+            print(f"❌ Error setting up OpenAI: {e}")
+            sys.exit(0)
+
     def get_model_selection(self, available_models: List[Dict]) -> str:
         """
         Display available Ollama models and get user selection

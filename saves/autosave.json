@@ -1,0 +1,425 @@
+{
+  "metadata": {
+    "save_version": "1.0",
+    "timestamp": "2025-08-25T23:33:23.313873",
+    "game_version": "Cra-mud-gen v1.0",
+    "save_name": "autosave.json"
+  },
+  "player": {
+    "location": "w1",
+    "current_room_id": "w1",
+    "theme": "horror",
+    "inventory": [],
+    "stats": {
+      "level": 1,
+      "experience": 0,
+      "gold": 1000
+    },
+    "combat_stats": {
+      "enemies_defeated": 0,
+      "total_damage_dealt": 0,
+      "total_damage_taken": 0,
+      "critical_hits": 0,
+      "battles_won": 0,
+      "battles_fled": 0
+    },
+    "health": 100,
+    "max_health": 100,
+    "level": 1,
+    "is_dead": false
+  },
+  "world": {
+    "theme": "horror",
+    "rooms": {
+      "market_square": {
+        "room_id": "market_square",
+        "description": "A bustling market square filled with the sounds of commerce. Wooden stalls line the cobblestone plaza, and merchants hawk their wares to passing travelers. The air is thick with the scent of spices and fresh bread.",
+        "items": [
+          "merchant_sign",
+          "coin_purse"
+        ],
+        "npcs": [
+          "Marcus the Trader"
+        ],
+        "connections": [
+          "start_room"
+        ],
+        "visited": false,
+        "depth": 1
+      },
+      "forge": {
+        "room_id": "forge",
+        "description": "A sweltering smithy filled with the ring of hammer on anvil. Glowing embers dance in the forge's heart while weapons and armor hang from the walls. The air shimmers with heat.",
+        "items": [
+          "anvil",
+          "hammer",
+          "cooling_barrel"
+        ],
+        "npcs": [
+          "Thorin Ironforge"
+        ],
+        "connections": [
+          "market_square"
+        ],
+        "visited": false,
+        "depth": 2
+      },
+      "dark_alley": {
+        "room_id": "dark_alley",
+        "description": "A shadowy alley where few dare to tread. Whispers echo from hidden alcoves, and the air carries hints of danger and forbidden dealings. Cloaked figures move in the darkness.",
+        "items": [
+          "hooded_cloak",
+          "mysterious_package"
+        ],
+        "npcs": [
+          "Shadow"
+        ],
+        "connections": [
+          "market_square"
+        ],
+        "visited": false,
+        "depth": 2
+      },
+      "start": {
+        "room_id": "start",
+        "description": "You stand at the entrance of **The Sanguine Sanctuary**. The adventure begins here.",
+        "items": [
+          "Whispers of the Damned"
+        ],
+        "npcs": [],
+        "connections": [
+          "north_1",
+          "south_1",
+          "west_1"
+        ],
+        "visited": false,
+        "depth": 0
+      },
+      "1": {
+        "room_id": "1",
+        "description": "You are in a quiet library. Tomes fill countless shelves. A rickety ladder vanishes into shadow. **Locate the Blood-stained Journal**: Enter the Sanguine Sanctuary and find the hidden journal in the abandoned library, which contains clues about the sanctuary's dark history.",
+        "items": [
+          "ancient tome",
+          "dusty candelabra",
+          "decaying quill"
+        ],
+        "npcs": [
+          "Brother Malcolm"
+        ],
+        "connections": [
+          "east_e1",
+          "up_u1",
+          "west_w1"
+        ],
+        "visited": false,
+        "depth": 0
+      },
+      "u1": {
+        "room_id": "u1",
+        "description": "You are in a quiet library. Scrolls fill countless shelves. Decaying steps sink into black depths. **Locate the Blood-stained Journal**: Enter the Sanguine Sanctuary and find the hidden journal in the abandoned library, which contains clues about the sanctuary's dark history.",
+        "items": [],
+        "npcs": [],
+        "connections": [
+          "down_1",
+          "west_w1_u1",
+          "north_n1_u1"
+        ],
+        "visited": false,
+        "depth": 0
+      },
+      "w1": {
+        "room_id": "w1",
+        "description": "You are in a scholarly library. Scrolls fill countless shelves. Broken stairs spiral into the abyss. **Locate the Blood-stained Journal**: Enter the Sanguine Sanctuary and find the hidden journal in the abandoned library, which contains clues about the sanctuary's dark history.",
+        "items": [
+          "leather-bound tome",
+          "ancient inkwell",
+          "dusty parchment"
+        ],
+        "npcs": [
+          "Brother Theodore"
+        ],
+        "connections": [
+          "east_1",
+          "down_w1_d1"
+        ],
+        "visited": false,
+        "depth": 0
+      }
+    },
+    "room_counter": 0,
+    "generated_depth": 1
+  },
+  "story": {
+    "story_threads": [],
+    "player_history": {
+      "choices": [],
+      "moral_alignment": 0,
+      "reputation": {},
+      "story_beats": [],
+      "character_arc": "unknown"
+    },
+    "world_state": {
+      "tension_level": 0,
+      "chaos_factor": 0,
+      "mystery_depth": 0,
+      "time_pressure": 0
+    },
+    "narrative_memory": []
+  },
+  "combat": {
+    "experience_system": {},
+    "health_system": {}
+  },
+  "conversation": {
+    "context": {
+      "current_npc": null,
+      "conversation_history": [
+        "Player: brother",
+        "brother malcolm: Whispers echo softly from the shadows, as if stirred by an unseen breeze. \"Yes? I am Brother Malcolm, traveler of these hallowed halls.\"",
+        "Player: attack brother malcolm",
+        "brother malcolm: You flinch at the sudden aggression, your eyes widening in surprise. \"Ah, traveler,\" you whisper, \"there's no need for such violence. I am but a humble chronicler, seeking to preserve what remains of this sanctuary.\""
+      ],
+      "npc_memory": {},
+      "last_topic": null,
+      "conversation_active": false
+    }
+  },
+  "quests": {
+    "quests": {
+      "llm_quest_0": {
+        "id": "llm_quest_0",
+        "title": "The Blood-Stained Secret",
+        "description": "Unravel the dark history of the Sanguine Sanctuary by finding the hidden journal in its abandoned library.",
+        "objectives": [
+          {
+            "id": "obj_0_0",
+            "description": "Navigate through the eerie hallways to reach the entrance of the Sanguine Sanctuary's library.",
+            "type": "travel",
+            "target": "library_entrance",
+            "target_count": 1,
+            "current_progress": 0,
+            "completed": false,
+            "hints": [
+              "Follow the scent of ancient parchment and dust.",
+              "Be cautious, the sanctuary is not entirely abandoned."
+            ]
+          },
+          {
+            "id": "obj_0_1",
+            "description": "Search for hidden clues within the library that hint at the journal's location.",
+            "type": "discover",
+            "target": "clue",
+            "target_count": 3,
+            "current_progress": 0,
+            "completed": false,
+            "hints": [
+              "Look for faded symbols on old tomes or secret compartments in shelves.",
+              "The clues might be obscured by cobwebs and dust."
+            ]
+          }
+        ],
+        "status": "active",
+        "rewards": {
+          "experience": 50,
+          "gold": 100,
+          "items": [
+            "quest_reward_0"
+          ]
+        },
+        "story_beat_index": 0
+      },
+      "llm_quest_1": {
+        "id": "llm_quest_1",
+        "title": "The Ritual Chamber Puzzle",
+        "description": "Decipher the ancient riddle to uncover the secret passage below the ritual chamber.",
+        "objectives": [
+          {
+            "id": "obj_1_0",
+            "description": "Find the hidden journal that contains the clues needed to solve the puzzle.",
+            "type": "discover",
+            "target": "journal",
+            "target_count": 1,
+            "current_progress": 0,
+            "completed": false,
+            "hints": [
+              "Look for a dusty, forgotten corner in the chamber.",
+              "The journal might be partially obscured by other artifacts."
+            ]
+          },
+          {
+            "id": "obj_1_1",
+            "description": "Study the journal's pages to decipher the code etched onto the ritual chamber floor.",
+            "type": "solve",
+            "target": "puzzle",
+            "target_count": 1,
+            "current_progress": 0,
+            "completed": false,
+            "hints": [
+              "Each symbol in the journal corresponds to a step on the floor.",
+              "Pay attention to patterns and repetitions in the symbols."
+            ]
+          }
+        ],
+        "status": "inactive",
+        "rewards": {
+          "experience": 75,
+          "gold": 150,
+          "items": [
+            "quest_reward_1"
+          ]
+        },
+        "story_beat_index": 1
+      },
+      "llm_quest_2": {
+        "id": "llm_quest_2",
+        "title": "Escape the Catacombs of Shadows",
+        "description": "Navigate through the dark catacombs and survive the wraith ambush.",
+        "objectives": [
+          {
+            "id": "obj_2_0",
+            "description": "Make your way to the first torch in the distance without alerting any nearby wraiths.",
+            "type": "travel",
+            "target": "torch",
+            "target_count": 1,
+            "current_progress": 0,
+            "completed": false,
+            "hints": [
+              "Stick to the shadows and move slowly to avoid detection.",
+              "Listen for faint whispers that signal wraith presence."
+            ]
+          },
+          {
+            "id": "obj_2_1",
+            "description": "Defeat or evade at least two wraiths along your path.",
+            "type": "defeat",
+            "target": "wraith",
+            "target_count": 2,
+            "current_progress": 0,
+            "completed": false,
+            "hints": [
+              "Use holy water or bright light to slow down wraiths.",
+              "Evading may be safer if you can't fight effectively."
+            ]
+          },
+          {
+            "id": "obj_2_2",
+            "description": "Reach the exit of the catacombs without being overwhelmed by more than three wraiths at a time.",
+            "type": "travel",
+            "target": "exit",
+            "target_count": 1,
+            "current_progress": 0,
+            "completed": false,
+            "hints": []
+          }
+        ],
+        "status": "inactive",
+        "rewards": {
+          "experience": 100,
+          "gold": 200,
+          "items": [
+            "quest_reward_2"
+          ]
+        },
+        "story_beat_index": 2
+      },
+      "llm_quest_3": {
+        "id": "llm_quest_3",
+        "title": "Confrontation at the Inner Sanctum",
+        "description": "Uncover the undead high priest's secrets and put an end to his reign.",
+        "objectives": [
+          {
+            "id": "obj_3_0",
+            "description": "Read the ancient journal to learn about the high priest's weaknesses",
+            "type": "discover",
+            "target": "journal",
+            "target_count": 1,
+            "current_progress": 0,
+            "completed": false,
+            "hints": [
+              "The journal is hidden in a locked chest within the temple library",
+              "Use the key from the fallen acolyte to unlock the chest"
+            ]
+          },
+          {
+            "id": "obj_3_1",
+            "description": "Navigate through the treacherous catacombs leading to the inner sanctum",
+            "type": "travel",
+            "target": "sanctum",
+            "target_count": 1,
+            "current_progress": 0,
+            "completed": false,
+            "hints": [
+              "Watch for traps and avoid pits filled with writhing shadows",
+              "The path is marked by faded runes that glow in moonlight"
+            ]
+          },
+          {
+            "id": "obj_3_2",
+            "description": "Engage the undead minions guarding the sanctum entrance",
+            "type": "defeat",
+            "target": "minions",
+            "target_count": 5,
+            "current_progress": 0,
+            "completed": false,
+            "hints": []
+          }
+        ],
+        "status": "inactive",
+        "rewards": {
+          "experience": 125,
+          "gold": 250,
+          "items": [
+            "quest_reward_3"
+          ]
+        },
+        "story_beat_index": 3
+      },
+      "llm_quest_4": {
+        "id": "llm_quest_4",
+        "title": "The Ancient Artifact's Escape",
+        "description": "Retrieve an ancient artifact from the heart of a sanctuary to prevent it from flooding with dark blood.",
+        "objectives": [
+          {
+            "id": "obj_4_0",
+            "description": "Navigate through the dimly lit corridors towards the inner sanctum, avoiding the rising blood levels.",
+            "type": "travel",
+            "target": "sanctum",
+            "target_count": 1,
+            "current_progress": 0,
+            "completed": false,
+            "hints": [
+              "Look for higher ground to avoid the dark blood's path.",
+              "Use your senses to detect changes in the environment, such as increased dampness or darkness."
+            ]
+          },
+          {
+            "id": "obj_4_1",
+            "description": "Find and secure the ancient artifact from its pedestal within the sanctum's heart.",
+            "type": "collect",
+            "target": "artifact",
+            "target_count": 1,
+            "current_progress": 0,
+            "completed": false,
+            "hints": [
+              "The artifact is likely well-hidden, so search for any unusual or out-of-place items.",
+              "Be cautious when handling the artifact; it may be enchanted or protected."
+            ]
+          }
+        ],
+        "status": "inactive",
+        "rewards": {
+          "experience": 150,
+          "gold": 300,
+          "items": [
+            "quest_reward_4"
+          ]
+        },
+        "story_beat_index": 4
+      }
+    },
+    "active_quests": [
+      "llm_quest_0"
+    ],
+    "completed_quests": []
+  }
+}
