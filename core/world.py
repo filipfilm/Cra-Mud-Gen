@@ -728,7 +728,8 @@ class World:
             if self.fallback_mode:
                 return self._fallback_item_ascii_art(item_name, theme)
             else:
-                raise RuntimeError("LLM with ASCII art capability is required for item art (fallback mode disabled)")
+                # Instead of failing, return empty string - ASCII art is optional
+                return ""
         
         try:
             # Generate object-type ASCII art for items

@@ -166,16 +166,30 @@ class StorySeedGenerator:
             generation_method='sliders'
         )
         
-        # Determine theme based on highest slider values
+        # Determine theme based on highest slider values - map to actual game themes
+        danger = slider_values.get('danger', 0)
+        discovery = slider_values.get('discovery', 0) 
+        scary = slider_values.get('scary', 0)
+        mystery = slider_values.get('mystery', 0)
+        
         theme_scores = {
-            'horror': slider_values.get('scary', 0),
-            'mystery': slider_values.get('mystery', 0),
-            'action': slider_values.get('danger', 0),
-            'exploration': slider_values.get('discovery', 0),
-            'comedy': slider_values.get('comedy', 0)
+            'horror': scary * 1.2 + mystery * 0.4,
+            'sci-fi': discovery * 1.0 + (danger * 0.2 if danger < 6 else 0),  # Prefer low-danger sci-fi
+            'fantasy': danger * 0.8 + mystery * 0.6 + (1 if danger >= 5 and mystery >= 3 else 0), 
+            'cyberpunk': (danger * 0.7 + discovery * 0.3) * (1.5 if danger >= 6 and discovery >= 5 else 1.0)  # High danger + discovery
         }
         
         primary_theme = max(theme_scores, key=theme_scores.get)
+        
+        # Override with keyword detection if custom text strongly suggests a theme
+        if custom_text:
+            keyword_theme = self._detect_theme_from_keywords(custom_text)
+            if keyword_theme and keyword_theme != primary_theme:
+                # Only override if keyword confidence is high
+                keyword_score = self._get_keyword_confidence(custom_text, keyword_theme)
+                if keyword_score >= 3:  # Strong keyword match
+                    primary_theme = keyword_theme
+        
         seed.theme = primary_theme
         
         # Generate basic elements based on sliders
@@ -379,9 +393,68 @@ class StorySeedGenerator:
         
         return seed
     
+    def _generate_characters_first(self, seed: StorySeed) -> StorySeed:
+        """Generate characters first before story creation"""
+        if not self.llm_interface:
+            return seed
+            
+        try:
+            prompt = f"""Generate 2-3 characters for a {seed.theme} adventure in {seed.setting}.
+
+Format your response EXACTLY like this:
+MAIN_CHARACTER: Title FirstName LastName - brief role description
+SUPPORTING_1: Name - brief role description  
+SUPPORTING_2: Name - brief role description (optional)
+
+Requirements:
+- Make names fit the {seed.theme} theme perfectly
+- Include appropriate titles/ranks where relevant
+- Keep role descriptions to 3-4 words max
+- Avoid overused fantasy names like Elara, Thorin, etc.
+- Avoid surnames ending in 'heart', 'wind', 'blade'
+
+Example format:
+MAIN_CHARACTER: Captain Aldric Rosethorne - veteran knight commander
+SUPPORTING_1: Mira Swiftarrow - skilled elven scout
+SUPPORTING_2: Gorin Ironforge - dwarven artificer"""
+
+            response = self.llm_interface.llm.generate_long_content(prompt, {"theme": seed.theme}, max_tokens=300)
+            
+            # Parse the structured response
+            lines = response.strip().split('\n')
+            for line in lines:
+                line = line.strip()
+                if line.startswith('MAIN_CHARACTER:'):
+                    char_info = line.replace('MAIN_CHARACTER:', '').strip()
+                    char_name = char_info.split(' - ')[0].strip()
+                    seed.main_characters = [char_name]
+                elif line.startswith('SUPPORTING_1:'):
+                    char_info = line.replace('SUPPORTING_1:', '').strip()
+                    char_name = char_info.split(' - ')[0].strip()
+                    if not seed.supporting_npcs:
+                        seed.supporting_npcs = []
+                    seed.supporting_npcs.append(char_name)
+                elif line.startswith('SUPPORTING_2:'):
+                    char_info = line.replace('SUPPORTING_2:', '').strip()
+                    char_name = char_info.split(' - ')[0].strip()
+                    if not seed.supporting_npcs:
+                        seed.supporting_npcs = []
+                    seed.supporting_npcs.append(char_name)
+            
+            # Fallback if parsing failed
+            if not seed.main_characters:
+                seed.main_characters = ["The Hero"]
+                
+        except Exception as e:
+            print(f"Character generation failed: {e}")
+            seed.main_characters = ["The Adventurer"]
+            
+        return seed
+    
     def _iterate_seed_with_llm(self, seed: StorySeed) -> StorySeed:
         """
         Use LLM to iterate and improve the story seed (1-3 iterations)
+        First generates structured characters, then creates story using those characters
         
         Args:
             seed: The initial seed
@@ -394,6 +467,13 @@ class StorySeedGenerator:
         
         current_seed = seed
         
+        # Step 1: Generate characters first with structured output
+        try:
+            current_seed = self._generate_characters_first(current_seed)
+        except Exception as e:
+            print(f"Character generation failed: {e}, continuing with iterations...")
+        
+        # Step 2: Regular iterations using the generated characters
         for iteration in range(self.max_iterations):
             try:
                 # Create prompt for LLM iteration
@@ -427,31 +507,44 @@ class StorySeedGenerator:
         Returns:
             Prompt string for LLM
         """
+        # Build character info string if characters exist
+        character_info = ""
+        if seed.main_characters:
+            character_info = f"Characters: {', '.join(seed.main_characters)}\n"
+        
         base_info = f"""
 Theme: {seed.theme}
 Setting: {seed.setting}
-Custom text: {seed.custom_text}
+{character_info}Custom text: {seed.custom_text}
 Danger level: {seed.danger_level}/10
 Mystery level: {seed.mystery_level}/10
 Scary factor: {seed.scary_factor}/10
 """
         
         if iteration == 0:
-            # Basic story from input
+            # Basic story from input - now uses pre-generated characters
+            character_instruction = ""
+            if seed.main_characters:
+                character_instruction = f"Use these specific characters: {', '.join(seed.main_characters)}"
+            
             return f"""Create a compelling story concept based on these elements:
 {base_info}
 
 Generate a brief story concept that incorporates these elements. Focus on:
 - A clear setting and atmosphere
 - The main conflict or challenge
-- 1-2 key characters
+- {character_instruction if character_instruction else "1-2 key characters"}
 - The overall mood and tone
 
 Keep it concise but engaging (2-3 sentences).
 """
         
         elif iteration == 1:
-            # Add complexity and stakes
+            # Add complexity and stakes - use established characters
+            character_instruction = ""
+            if seed.main_characters:
+                character_instruction = f"Focus on these established characters: {', '.join(seed.main_characters)}"
+            
             return f"""Enhance this story concept with more complexity:
 
 Current story: {seed.conflict} in {seed.setting}
@@ -459,7 +552,7 @@ Current story: {seed.conflict} in {seed.setting}
 
 Add depth by including:
 - Higher stakes or consequences
-- Character motivations and backgrounds  
+- {character_instruction if character_instruction else "Character motivations and backgrounds"}
 - Secondary conflicts or complications
 - Specific details that make it unique
 
@@ -467,22 +560,21 @@ Expand to 4-5 sentences with richer detail.
 """
         
         else:  # iteration == 2
-            # Add specific details and hooks
+            # Add specific details and hooks - build on established characters
             return f"""Create the final, detailed story concept with complete details:
 
 Current story elements:
 Setting: {seed.setting}
 Conflict: {seed.conflict}
-Characters: {', '.join(seed.main_characters) if seed.main_characters else 'TBD'}
 {base_info}
 
 Write a rich, complete story concept that includes:
-- Named characters with full names and clear roles (e.g., "Sir Marcus Blackwood, veteran knight")
+- Use the established characters by their full names and roles
 - Specific organizations, locations, or entities with descriptive names
 - Concrete story hooks and mysteries that drive the plot forward
 - A clear progression path showing how the adventure unfolds step by step
 
-Write 6-8 complete sentences. Ensure each sentence is fully finished without cutting off mid-thought. Include specific character names, place names, and plot details that bring the story to life.
+Write 6-8 complete sentences. Ensure each sentence is fully finished without cutting off mid-thought. Include the character names exactly as provided, place names, and plot details that bring the story to life.
 """
     
     def _parse_llm_response(self, seed: StorySeed, response: str, iteration: int) -> StorySeed:
@@ -504,13 +596,7 @@ Write 6-8 complete sentences. Ensure each sentence is fully finished without cut
         if iteration == 0:
             # Basic story extraction
             seed.mood = response
-            # Try to extract key elements
-            if "character" in response.lower():
-                # Simple character extraction
-                words = response.split()
-                potential_chars = [w.capitalize() for w in words if len(w) > 3 and w.isalpha()]
-                if potential_chars:
-                    seed.main_characters = potential_chars[:2]
+            # Don't extract characters - they were pre-generated with structured format
         
         elif iteration == 1:
             # Enhanced story with complexity
@@ -523,45 +609,43 @@ Write 6-8 complete sentences. Ensure each sentence is fully finished without cut
             seed.conflict = response
             # Extract detailed elements
             seed.plot_hooks = [response]  # The whole response becomes the main hook
-            
-            # Try to extract names (capitalized words that might be characters/places)
-            import re
-            
-            # Look for clear character patterns first
-            character_patterns = [
-                r'\b(Sir|Lady|Lord|Captain|General|Master|Doctor|Professor)\s+([A-Z][a-z]+(?:\s+[A-Z][a-z]+)*)\b',
-                r'\b([A-Z][a-z]+\s+[A-Z][a-z]+)\b',  # First Last name patterns
-                r'\b([A-Z][a-z]{3,})\s+(the|of|from)\b',  # Names with titles
-            ]
-            
-            found_characters = []
-            for pattern in character_patterns:
-                matches = re.findall(pattern, response)
-                for match in matches:
-                    if isinstance(match, tuple):
-                        name = ' '.join(m for m in match if m and not m.lower() in ['the', 'of', 'from'])
-                    else:
-                        name = match
-                    
-                    if name and len(name) > 2:
-                        found_characters.append(name)
-            
-            # Fallback to proper nouns but filter out common words
-            if not found_characters:
-                proper_nouns = re.findall(r'\b[A-Z][a-z]{3,}\b', response)
-                common_words = {'You', 'The', 'This', 'That', 'They', 'There', 'Your', 'Their', 'Heart', 'Sanctum', 'Temple', 'Chasm', 'Echo', 'Echoes', 'Magic', 'Order', 'past', 'Past', 'Time', 'Space'}
-                found_characters = [noun for noun in proper_nouns if noun not in common_words]
-            
-            if found_characters:
-                # Clear existing characters first to avoid duplication
-                existing = set(seed.main_characters)
-                new_chars = [char for char in found_characters[:3] if char not in existing]
-                seed.main_characters.extend(new_chars[:3])
-                
-                remaining = [char for char in found_characters[3:] if char not in existing and char not in new_chars]
-                seed.supporting_npcs.extend(remaining[:3])
+            # Don't extract characters - they were pre-generated with structured format
         
         return seed
+    
+    def _detect_theme_from_keywords(self, text: str) -> Optional[str]:
+        """Detect theme based on keyword presence in text"""
+        theme_keywords = {
+            'fantasy': ['magic', 'wizard', 'dragon', 'castle', 'knight', 'sword', 'elf', 'dwarf', 'spell', 'enchanted', 'mystical'],
+            'sci-fi': ['space', 'alien', 'robot', 'future', 'technology', 'ship', 'laser', 'plasma', 'station', 'colony', 'android'],
+            'horror': ['scary', 'ghost', 'haunted', 'terror', 'fear', 'dark', 'monster', 'zombie', 'vampire', 'cursed', 'demonic'],
+            'cyberpunk': ['cyber', 'hacker', 'corporate', 'neon', 'virtual', 'neural', 'megacity', 'synth', 'matrix', 'data', 'chrome']
+        }
+        
+        text_lower = text.lower()
+        theme_scores = {}
+        
+        for theme, keywords in theme_keywords.items():
+            score = sum(1 for keyword in keywords if keyword in text_lower)
+            if score > 0:
+                theme_scores[theme] = score
+        
+        return max(theme_scores, key=theme_scores.get) if theme_scores else None
+    
+    def _get_keyword_confidence(self, text: str, theme: str) -> int:
+        """Get confidence score for keyword-based theme detection"""
+        theme_keywords = {
+            'fantasy': ['magic', 'wizard', 'dragon', 'castle', 'knight', 'sword', 'elf', 'dwarf', 'spell', 'enchanted', 'mystical'],
+            'sci-fi': ['space', 'alien', 'robot', 'future', 'technology', 'ship', 'laser', 'plasma', 'station', 'colony', 'android'],
+            'horror': ['scary', 'ghost', 'haunted', 'terror', 'fear', 'dark', 'monster', 'zombie', 'vampire', 'cursed', 'demonic'],
+            'cyberpunk': ['cyber', 'hacker', 'corporate', 'neon', 'virtual', 'neural', 'megacity', 'synth', 'matrix', 'data', 'chrome']
+        }
+        
+        if theme not in theme_keywords:
+            return 0
+            
+        text_lower = text.lower()
+        return sum(1 for keyword in theme_keywords[theme] if keyword in text_lower)
     
     def validate_seed(self, seed: StorySeed) -> Tuple[bool, List[str]]:
         """

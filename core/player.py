@@ -22,8 +22,8 @@ class Player(Combatant):
         super().__init__("Player", 100, 1)
         
         # More game-specific attributes
-        self.location = "start_room"
-        self.current_room_id = "start_room"
+        self.location = "start"
+        self.current_room_id = "start"
         self.inventory: List[str] = []
         self.theme = "fantasy"  # Default theme
         
@@ -41,7 +41,7 @@ class Player(Combatant):
         self.visited_rooms = set()
         self.rooms_discovered = 0
         self.exploration_points = 0
-        self.visited_rooms.add("start_room")  # Mark starting room as visited
+        self.visited_rooms.add("start")  # Mark starting room as visited
         
         # Crafting system
         self.crafting = PlayerCrafting()

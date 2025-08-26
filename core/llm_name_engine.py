@@ -143,17 +143,36 @@ Generate just the name, nothing else:"""
             else:
                 raise RuntimeError("LLM is required for location name generation (fallback mode disabled)")
         
-        prompt = f"""Generate a {location_type} name for a {theme} setting.
+        # Add variety to prevent repetitive generation
+        variety_prompts = [
+            "Generate a unique and original",
+            "Create a distinctive", 
+            "Invent a memorable",
+            "Design an evocative"
+        ]
+        
+        variety_instructions = [
+            "FORBIDDEN WORDS: Never use 'Whispering', 'Shadow', 'Dark', 'Abyss', 'Heart', 'Echo', 'Void'. Create something completely different.",
+            "AVOID CLICHÉS: Do not use overused fantasy words like 'Iron', 'Dragon', 'Storm', 'Flame', 'Frost', 'Blood'. Be creative.", 
+            "BE ORIGINAL: Invent new fantasy terminology instead of using common tropes. Think of unusual materials, colors, or phenomena.",
+            "NO REPETITION: Create something that sounds completely different from typical dungeon names. Use unexpected combinations."
+        ]
+        
+        prompt_start = random.choice(variety_prompts)
+        variety_instruction = random.choice(variety_instructions)
+        
+        prompt = f"""{prompt_start} {location_type} name for a {theme} setting.
 
 Requirements:
 - Make it atmospheric and memorable
 - Fit the {theme} theme perfectly
 - Be 1-3 words typically
 - Sound authentic and immersive
+- {variety_instruction}
 
-Examples for reference:
-Fantasy: "Shadowmere Keep", "Whispering Caverns", "Thornwood Sanctum"
-Sci-fi: "Nexus Station", "Quantum Labs", "Solar Outpost"
+Examples for reference (avoid copying these exactly):
+Fantasy: "Moonstone Citadel", "Goldleaf Sanctuary", "Sunrise Valley"
+Sci-fi: "Nexus Station", "Quantum Labs", "Solar Outpost"  
 Horror: "Blackwood Asylum", "Ravencroft Manor", "The Bone Chapel"
 Cyberpunk: "Neon District", "Chrome Tower", "The Underground"
 
@@ -185,8 +204,8 @@ Requirements:
 - Be appropriate for the {role} character type
 - 1-2 words maximum
 
-Examples for reference:
-Fantasy warrior: "Thorin", "Elara", "Gareth"
+Examples for reference (create something original, don't copy these):
+Fantasy warrior: "Aldwin", "Brenna", "Corvin"  
 Sci-fi engineer: "Zara", "Marcus", "Nova"
 Horror investigator: "Vincent", "Elena", "Magnus"
 Cyberpunk hacker: "Jax", "Kira", "Blade"
@@ -194,6 +213,16 @@ Cyberpunk hacker: "Jax", "Kira", "Blade"
 Generate just the name, nothing else:"""
             
         elif name_type == "full":
+            # Add variety and forbidden terms for full names too
+            full_name_variety = [
+                "FORBIDDEN SURNAMES: Never use names ending in 'heart', 'wind', 'blade', 'shadow', 'storm'. Be completely original.",
+                "AVOID CLICHÉS: Do not use overused fantasy surnames like 'Ironforge', 'Blackthorn', 'Goldleaf', 'Brightspear'.",
+                "BE CREATIVE: Invent unique surname combinations that sound fresh and haven't been overused.",
+                "NO REPETITION: Create something distinctive that doesn't sound like every other fantasy character."
+            ]
+            
+            full_name_instruction = random.choice(full_name_variety)
+            
             prompt = f"""Generate a full name with title for a {role} in a {theme} setting.
 
 Requirements:
@@ -201,9 +230,10 @@ Requirements:
 - Make it pronounceable and memorable  
 - Fit the {theme} genre perfectly
 - Format: "Title FirstName LastName" or similar
+- {full_name_instruction}
 
-Examples for reference:
-Fantasy: "Sir Aldric Stormwind", "Lady Mira Shadowleaf", "Captain Theron Brightblade"
+Examples for reference (avoid copying these patterns):
+Fantasy: "Captain Lysander Goldmane", "Dame Vivienne Rosethorne", "Baron Felix Copperfield"
 Sci-fi: "Commander Sarah Chen", "Engineer Kai Nakamura", "Pilot Rex Vortex"  
 Horror: "Dr. Vincent Cross", "Detective Sarah Mills", "Father Marcus Kane"
 Cyberpunk: "Runner Echo", "Ghost Protocol", "Agent Nova"

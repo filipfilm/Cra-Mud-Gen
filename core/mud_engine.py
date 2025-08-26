@@ -17,7 +17,7 @@ from ui.combat_ui import CombatUI
 from core.command_processor import CommandProcessor
 from core.combat_system import CombatSystem
 from core.conversation_system import ConversationSystem
-from core.story_engine import StoryEngine
+from core.story_engine import StoryEngine, StoryThread, StoryTone
 from core.choice_processor import ChoiceProcessor
 from llm.llm_interface import LLMIntegrationLayer
 from core.map_system import MapSystem
@@ -27,6 +27,8 @@ from core.narrative_engine import NarrativeEngine
 from core.story_seed_generator import StorySeed
 from core.crafting_system import CraftingSystem
 from core.economy_system import EconomySystem
+from core.quest_system import QuestSystem
+from core.puzzle_system import PuzzleSystem
 
 class GameEngine:
     """
@@ -69,12 +71,32 @@ class GameEngine:
         self.economy_system = EconomySystem(self.llm)
         self._setup_merchant_rooms()
         
+        # Initialize quest system
+        self.quest_system = QuestSystem()
+        
+        # Initialize puzzle system with LLM
+        self.puzzle_system = PuzzleSystem(self.llm)
+        
         if self.story_seed:
             print(f"Initializing narrative with {self.story_seed.theme} theme...")
             self.narrative_state = self.narrative_engine.initialize_narrative(self.story_seed)
             
             # Pass narrative context to world generation
             self.world.set_narrative_context(self.narrative_state)
+            
+            # Generate quests from story beats
+            if hasattr(self.story_seed, 'story_beats') and self.story_seed.story_beats:
+                quests = self.quest_system.generate_quests_from_story_beats(self.story_seed.story_beats)
+                if quests:
+                    print(f"📋 Generated {len(quests)} quest objectives from your story!")
+                
+                # Generate puzzles from story beats
+                puzzles = self.puzzle_system.create_story_puzzles(self.story_seed.story_beats, self.story_seed.theme)
+                if puzzles:
+                    print(f"🧩 Created {len(puzzles)} puzzles to challenge you!")
+                    # Activate the first puzzle
+                    if puzzles:
+                        self.puzzle_system.activate_puzzle(puzzles[0].id)
         
         self.game_over = False
         
@@ -191,12 +213,29 @@ class GameEngine:
         self.world.generate_dungeon(theme)
         
         # Set player to start room using proper method
-        self.player.move_to_location("start_room")
+        self.player.move_to_location("start")
         
-        # Initialize story arc
-        main_story = self.story_engine.initialize_story_arc(theme)
-        print(f"\n🎭 {main_story.title}")
-        print(f"📖 {main_story.description}\n")
+        # Initialize story arc using story seed if available
+        if self.story_seed and self.story_seed.conflict:
+            # Use the generated story seed
+            print(f"\n🎭 {self.story_seed.setting or 'Your Adventure'}")
+            print(f"📖 {self.story_seed.conflict}\n")
+            
+            # Create a story thread from the story seed
+            main_story = StoryThread(
+                id="main_quest",
+                title=self.story_seed.setting or "Your Adventure", 
+                description=self.story_seed.conflict,
+                theme=theme,
+                tone=StoryTone.HEROIC,  # Could be derived from story seed mood
+                complexity=7
+            )
+            self.story_engine.active_threads = [main_story]
+        else:
+            # Fallback to original story generation
+            main_story = self.story_engine.initialize_story_arc(theme)
+            print(f"\n🎭 {main_story.title}")
+            print(f"📖 {main_story.description}\n")
     
     def _process_command_result(self, result, context=None):
         """
@@ -209,6 +248,22 @@ class GameEngine:
             self.game_over = True
             self.ui.display_goodbye()
         elif result["type"] == "movement":
+            # Check if movement is blocked by a puzzle
+            is_blocked, blocking_puzzle = self.puzzle_system.is_direction_blocked(
+                self.player.location, result["direction"]
+            )
+            
+            if is_blocked and blocking_puzzle:
+                self.ui.display_message(f"""
+🧩 Your path is blocked!
+
+{blocking_puzzle.description}
+
+The way {result['direction']} is sealed until you solve this puzzle.
+Type your answer or use 'hints' for clues.
+""")
+                return
+            
             # Save old location before moving
             old_location = self.player.location
             
@@ -244,6 +299,9 @@ class GameEngine:
             
             # Check for enemy encounters in new room
             self._check_for_enemies(result["new_location"])
+            
+            # Update quest progress for room exploration
+            self._update_quest_progress("room_entered", result["new_location"])
         elif result["type"] == "look":
             current_room = self.world.get_room(self.player.location)
             if current_room:
@@ -281,6 +339,9 @@ Type 'map' to see your dungeon map!
             # Handle taking items from the room
             take_result = self._handle_take_item(result["item"])
             self.ui.display_message(take_result)
+            
+            # Update quest progress for item collection
+            self._update_quest_progress("item_taken", result["item"])
         elif result["type"] == "drop":
             # Handle dropping items in the room
             drop_result = self._handle_drop_item(result["item"])
@@ -293,6 +354,9 @@ Type 'map' to see your dungeon map!
             # Handle examining items with ASCII art and effects
             examine_result = self._handle_examine_item(result["item"])
             self.ui.display_examine_result(examine_result, result["item"], self.player.theme, self.llm)
+            
+            # Update quest progress for item interaction
+            self._update_quest_progress("item_examined", result["item"])
         elif result["type"] == "combat_action":
             # Handle combat actions
             if self.in_combat:
@@ -300,9 +364,19 @@ Type 'map' to see your dungeon map!
             else:
                 self.ui.display_error("You are not in combat!")
         elif result["type"] == "narrative":
-            # Send narrative commands to LLM for immersive responses
-            narrative_response = self._generate_narrative_response(result["command"])
-            self.ui.display_message(narrative_response)
+            # First check if this might be a puzzle answer
+            puzzle_result = self.puzzle_system.attempt_puzzle(self.player.location, result["command"])
+            
+            if puzzle_result["success"]:
+                # It was a puzzle solution!
+                self._handle_puzzle_attempt(result["command"])
+            elif puzzle_result.get("puzzle"):
+                # There's a puzzle here but this wasn't the right answer
+                self.ui.display_message(puzzle_result["message"])
+            else:
+                # Send narrative commands to LLM for immersive responses
+                narrative_response = self._generate_narrative_response(result["command"])
+                self.ui.display_message(narrative_response)
         elif result["type"] == "save":
             self._handle_save_game(result.get("save_name"))
         elif result["type"] == "load":
@@ -335,6 +409,12 @@ Type 'map' to see your dungeon map!
             self._handle_browse_shop()
         elif result["type"] == "prices":
             self._handle_show_prices()
+        elif result["type"] == "quests":
+            self._handle_quest_log()
+        elif result["type"] == "hints":
+            self._handle_quest_hints()
+        elif result["type"] == "solve":
+            self._handle_puzzle_attempt(result["answer"])
         elif result["type"] == "invalid":
             self.ui.display_error(result["message"])
         
@@ -1577,3 +1657,177 @@ Type 'map' to see your dungeon map!
         for merchant_id, merchant in self.economy_system.merchants.items():
             if merchant_id != "traveling":  # Traveling merchant appears randomly
                 self.economy_system._restock_merchants()
+    
+    def _handle_quest_log(self):
+        """Display the player's quest log"""
+        quest_log = self.quest_system.get_quest_log()
+        
+        if not quest_log["active_quests"]:
+            print("📋 No active quests.")
+            if quest_log["completed_count"] > 0:
+                print(f"You have completed {quest_log['completed_count']} quest(s)!")
+            return
+        
+        print("📋 === QUEST LOG ===")
+        print(f"Active Quests: {len(quest_log['active_quests'])}")
+        print(f"Completed: {quest_log['completed_count']}/{quest_log['total_count']}")
+        print()
+        
+        for quest in quest_log["active_quests"]:
+            progress_bar = self._create_progress_bar(quest["progress"])
+            print(f"🎯 {quest['title']} {progress_bar} {quest['progress']:.0f}%")
+            print(f"   {quest['description']}")
+            print()
+            
+            print("   Objectives:")
+            for obj in quest["objectives"]:
+                if obj["completed"]:
+                    status = "✅"
+                else:
+                    status = "⏳"
+                
+                desc = obj["description"]
+                if obj["progress"]:
+                    desc += f" ({obj['progress']})"
+                    
+                print(f"   {status} {desc}")
+                
+                # Show hints for active objectives
+                if not obj["completed"] and obj["hints"]:
+                    for hint in obj["hints"][:2]:  # Show max 2 hints
+                        print(f"      💡 {hint}")
+            print()
+        
+        print("Type 'hints' for additional clues!")
+    
+    def _handle_quest_hints(self):
+        """Display hints for current active objectives"""
+        quest_log = self.quest_system.get_quest_log()
+        
+        if not quest_log["active_quests"]:
+            print("💡 No active quests to provide hints for.")
+            return
+            
+        print("💡 === QUEST HINTS ===")
+        has_hints = False
+        
+        for quest in quest_log["active_quests"]:
+            active_objectives = [obj for obj in quest["objectives"] if not obj["completed"]]
+            
+            if active_objectives:
+                print(f"🎯 {quest['title']}:")
+                
+                for obj in active_objectives:
+                    if obj["hints"]:
+                        has_hints = True
+                        print(f"   📌 {obj['description']}:")
+                        for hint in obj["hints"]:
+                            print(f"      💡 {hint}")
+                print()
+        
+        if not has_hints:
+            print("No additional hints available for your current objectives.")
+            print("Try exploring, examining objects, or talking to NPCs for clues!")
+    
+    def _create_progress_bar(self, percentage: float, width: int = 10) -> str:
+        """Create a visual progress bar"""
+        filled = int((percentage / 100) * width)
+        empty = width - filled
+        return f"[{'█' * filled}{'░' * empty}]"
+    
+    def _update_quest_progress(self, action_type: str, target: str, amount: int = 1):
+        """Update quest progress based on player actions"""
+        from core.quest_system import ObjectiveType
+        
+        # Map action types to objective types
+        action_mapping = {
+            "item_taken": ObjectiveType.COLLECT,
+            "room_entered": ObjectiveType.TRAVEL,
+            "item_used": ObjectiveType.INTERACT,
+            "item_examined": ObjectiveType.INTERACT,
+            "puzzle_solved": ObjectiveType.SOLVE,
+            "enemy_defeated": ObjectiveType.DEFEAT,
+            "area_discovered": ObjectiveType.DISCOVER
+        }
+        
+        if action_type in action_mapping:
+            objective_type = action_mapping[action_type]
+            completed_quests = self.quest_system.update_objective_progress(target, objective_type, amount)
+            
+            # Handle quest completions
+            for quest_id in completed_quests:
+                rewards = self.quest_system.complete_quest(quest_id)
+                quest = self.quest_system.quests[quest_id]
+                
+                print(f"🎉 Quest Completed: {quest.title}")
+                if rewards:
+                    self._apply_quest_rewards(rewards)
+                
+                # Activate next quest if available
+                self._activate_next_quest()
+    
+    def _apply_quest_rewards(self, rewards: dict):
+        """Apply quest completion rewards to player"""
+        if "experience" in rewards:
+            old_exp = self.player.experience
+            self.player.stats["experience"] += rewards["experience"]
+            print(f"📈 Gained {rewards['experience']} experience!")
+            
+            # Check for level up
+            level_result = self.player.level_up_if_ready()
+            if level_result["leveled_up"]:
+                print(f"🎉 Level up! You are now level {level_result['new_level']}!")
+                
+        if "gold" in rewards:
+            self.player.stats["gold"] += rewards["gold"]
+            print(f"💰 Gained {rewards['gold']} gold!")
+            
+        if "items" in rewards:
+            for item in rewards["items"]:
+                if self.player.add_to_inventory(item):
+                    print(f"🎁 Received: {item}")
+                else:
+                    print(f"📦 Your inventory is full! {item} dropped on the ground.")
+                    current_room = self.world.get_room(self.player.location)
+                    if current_room:
+                        current_room.items.append(item)
+    
+    def _activate_next_quest(self):
+        """Activate the next available quest in sequence"""
+        # Find next story quest that isn't active or completed
+        for quest_id, quest in self.quest_system.quests.items():
+            if (quest_id.startswith("story_quest_") and 
+                quest.status.value == "inactive" and 
+                quest_id not in self.quest_system.completed_quests):
+                if self.quest_system.activate_quest(quest_id):
+                    print(f"📋 New Quest: {quest.title}")
+                    break
+    
+    def _handle_puzzle_attempt(self, answer: str):
+        """Handle a puzzle solving attempt"""
+        result = self.puzzle_system.attempt_puzzle(self.player.location, answer)
+        
+        if result["success"]:
+            self.ui.display_message(result["message"])
+            
+            # Apply rewards
+            if result.get("rewards"):
+                self._apply_quest_rewards(result["rewards"])
+            
+            # Update quest progress
+            self._update_quest_progress("puzzle_solved", result["puzzle"].name)
+            
+            # Activate next puzzle if available
+            self._activate_next_puzzle()
+            
+        else:
+            self.ui.display_message(result["message"])
+    
+    def _activate_next_puzzle(self):
+        """Activate the next puzzle in sequence"""
+        # Find next inactive puzzle and activate it
+        for puzzle_id, puzzle in self.puzzle_system.puzzles.items():
+            if puzzle.status.value == "inactive":
+                self.puzzle_system.activate_puzzle(puzzle_id)
+                print(f"🧩 A new challenge awaits: {puzzle.name}")
+                break

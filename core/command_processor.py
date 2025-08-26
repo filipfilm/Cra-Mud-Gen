@@ -43,7 +43,10 @@ class CommandProcessor:
             "sell": r"^(sell)\s+(.+)\s*$",
             "haggle": r"^(haggle|negotiate)\s+(.+)\s*$",
             "shop": r"^(shop|browse|list goods|show items)\s*$",
-            "prices": r"^(prices|market prices|economy)\s*$"
+            "prices": r"^(prices|market prices|economy)\s*$",
+            "quests": r"^(quests|quest log|quest|objectives|log|j)\s*$",
+            "hints": r"^(hints|hint|clue|clues)\s*$",
+            "solve": r"^(solve|answer)\s+(.+)\s*$"
         }
         
     def parse(self, user_input: str, player, world) -> Dict[str, Any]:

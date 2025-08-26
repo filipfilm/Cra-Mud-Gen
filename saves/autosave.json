@@ -1,0 +1,132 @@
+{
+  "metadata": {
+    "save_version": "1.0",
+    "timestamp": "2025-08-25T17:12:22.493072",
+    "game_version": "Cra-mud-gen v1.0",
+    "save_name": "autosave.json"
+  },
+  "player": {
+    "location": "start_room",
+    "current_room_id": "start_room",
+    "theme": "fantasy",
+    "inventory": [],
+    "stats": {
+      "level": 1,
+      "experience": 0,
+      "gold": 1000
+    },
+    "combat_stats": {
+      "enemies_defeated": 0,
+      "total_damage_dealt": 0,
+      "total_damage_taken": 0,
+      "critical_hits": 0,
+      "battles_won": 0,
+      "battles_fled": 0
+    },
+    "health": 100,
+    "max_health": 100,
+    "level": 1,
+    "is_dead": false
+  },
+  "world": {
+    "theme": "fantasy",
+    "rooms": {
+      "market_square": {
+        "room_id": "market_square",
+        "description": "A bustling market square filled with the sounds of commerce. Wooden stalls line the cobblestone plaza, and merchants hawk their wares to passing travelers. The air is thick with the scent of spices and fresh bread.",
+        "items": [
+          "merchant_sign",
+          "coin_purse"
+        ],
+        "npcs": [
+          "Marcus the Trader"
+        ],
+        "connections": [
+          "start_room"
+        ],
+        "visited": false,
+        "depth": 1
+      },
+      "forge": {
+        "room_id": "forge",
+        "description": "A sweltering smithy filled with the ring of hammer on anvil. Glowing embers dance in the forge's heart while weapons and armor hang from the walls. The air shimmers with heat.",
+        "items": [
+          "anvil",
+          "hammer",
+          "cooling_barrel"
+        ],
+        "npcs": [
+          "Thorin Ironforge"
+        ],
+        "connections": [
+          "market_square"
+        ],
+        "visited": false,
+        "depth": 2
+      },
+      "dark_alley": {
+        "room_id": "dark_alley",
+        "description": "A shadowy alley where few dare to tread. Whispers echo from hidden alcoves, and the air carries hints of danger and forbidden dealings. Cloaked figures move in the darkness.",
+        "items": [
+          "hooded_cloak",
+          "mysterious_package"
+        ],
+        "npcs": [
+          "Shadow"
+        ],
+        "connections": [
+          "market_square"
+        ],
+        "visited": false,
+        "depth": 2
+      },
+      "start": {
+        "room_id": "start",
+        "description": "You stand at the entrance of Cavern of Starlight. The air is thick with mystery and adventure awaits. Random fantasy adventure with dynamic elements...",
+        "items": [
+          "Chronicle of Whispers",
+          "Essence of Lunar Bloom"
+        ],
+        "npcs": [],
+        "connections": [
+          "north_1",
+          "south_1"
+        ],
+        "visited": false,
+        "depth": 0
+      }
+    },
+    "room_counter": 0,
+    "generated_depth": 1
+  },
+  "story": {
+    "story_threads": [],
+    "player_history": {
+      "choices": [],
+      "moral_alignment": 0,
+      "reputation": {},
+      "story_beats": [],
+      "character_arc": "unknown"
+    },
+    "world_state": {
+      "tension_level": 0,
+      "chaos_factor": 0,
+      "mystery_depth": 0,
+      "time_pressure": 0
+    },
+    "narrative_memory": []
+  },
+  "combat": {
+    "experience_system": {},
+    "health_system": {}
+  },
+  "conversation": {
+    "context": {
+      "current_npc": null,
+      "conversation_history": [],
+      "npc_memory": {},
+      "last_topic": null,
+      "conversation_active": false
+    }
+  }
+}
