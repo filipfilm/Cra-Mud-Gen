@@ -73,12 +73,14 @@ class World:
         
         # Base description with narrative enhancement
         if self.narrative_state and self.narrative_state.seed.setting:
-            description = f"You stand at the entrance of {self.narrative_state.seed.setting}. The air is thick with mystery and adventure awaits."
+            description = f"You stand at the entrance of {self.narrative_state.seed.setting}. The adventure begins here."
         else:
             description = f"You stand at the entrance of a {current_theme} dungeon. The air is thick with mystery and adventure awaits."
         
-        # Add story-specific atmosphere if available
-        if self.narrative_state and self.narrative_state.seed.custom_text:
+        # Add story-specific atmosphere if available - but exclude generic placeholders
+        if (self.narrative_state and self.narrative_state.seed.custom_text and 
+            not self.narrative_state.seed.custom_text.startswith("Random ") and
+            "adventure with dynamic elements" not in self.narrative_state.seed.custom_text):
             description += f" {self.narrative_state.seed.custom_text[:100]}..."
         
         # Starting room has 2-3 exits randomly
@@ -682,7 +684,8 @@ class World:
             if self.fallback_mode:
                 return self._fallback_room_ascii_art(room_type, theme)
             else:
-                raise RuntimeError("LLM with ASCII art capability is required (fallback mode disabled)")
+                # Instead of failing, return empty string - ASCII art is optional
+                return ""
         
         try:
             # Create subjects based on room type and theme
@@ -714,7 +717,8 @@ class World:
             if self.fallback_mode:
                 return self._fallback_room_ascii_art(room_type, theme)
             else:
-                raise RuntimeError(f"Room ASCII art generation failed and fallback mode disabled: {e}")
+                # Instead of failing, return empty string - ASCII art is optional
+                return ""
     
     def _fallback_room_ascii_art(self, room_type: str, theme: str) -> str:
         """Fallback ASCII art disabled - LLM generation required"""
@@ -743,7 +747,8 @@ class World:
             if self.fallback_mode:
                 return self._fallback_item_ascii_art(item_name, theme)
             else:
-                raise RuntimeError(f"Item ASCII art generation failed and fallback mode disabled: {e}")
+                # Instead of failing, return empty string - ASCII art is optional
+                return ""
     
     def _fallback_item_ascii_art(self, item_name: str, theme: str) -> str:
         """Fallback ASCII art disabled - LLM generation required"""

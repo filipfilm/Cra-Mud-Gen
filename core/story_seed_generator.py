@@ -271,8 +271,8 @@ class StorySeedGenerator:
         # Populate with theme-based content
         seed = self._populate_seed_from_theme_dynamically(seed, theme)
         
-        # Add some randomization
-        seed.custom_text = f"Random {theme} adventure with dynamic elements"
+        # Don't override custom_text with generic placeholder - let the LLM generate meaningful content
+        # seed.custom_text remains empty for random generation, which is better than generic placeholder
         
         # If LLM is available, iterate to improve
         if self.llm_interface:
