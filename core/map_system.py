@@ -136,18 +136,34 @@ class MapSystem:
         return (old_x + dx, old_y + dy)
     
     def _extract_primary_direction(self, room_id: str) -> Optional[str]:
-        """Extract the primary direction from compact room IDs like 'w1', 'e2', 'n1s2'"""
+        """Extract the primary direction from various room ID formats"""
         import re
         
-        # Look for direction letters at the start
-        match = re.match(r'^([nsewud])', room_id.lower())
+        room_id_lower = room_id.lower().strip()
+        
+        # Skip non-directional room IDs
+        if room_id_lower in ['start', 'start_room'] or room_id_lower.isdigit():
+            return None
+        
+        # Handle old format like "east_1", "north_n1", "south_1" 
+        if '_' in room_id_lower:
+            first_part = room_id_lower.split('_')[0]
+            if first_part in ['north', 'south', 'east', 'west', 'up', 'down']:
+                return first_part
+            
+            # Handle complex format like "n1_w1" (north 1, west 1) - take the last direction
+            if any(d in room_id_lower for d in ['n', 's', 'e', 'w', 'u', 'd']):
+                parts = room_id_lower.split('_')
+                # Look for direction in the last meaningful part
+                for part in reversed(parts):
+                    match = re.search(r'([nsewud])', part)
+                    if match:
+                        return match.group(1)
+        
+        # Handle simple format like "w1", "e2", "n1"
+        match = re.match(r'^([nsewud])\d*$', room_id_lower)
         if match:
             return match.group(1)
-        
-        # Handle multi-directional IDs by taking the first direction found
-        directions_found = re.findall(r'([nsewud])\d*', room_id.lower())
-        if directions_found:
-            return directions_found[0]
         
         return None
     
@@ -305,7 +321,8 @@ class MapSystem:
         ]
         
         for room_id, room in self.rooms.items():
-            debug_info.append(f"  {room_id}: pos=({room.x}, {room.y}), visited={room.visited}, connections={room.connections}")
+            current_marker = " <-- CURRENT" if room_id == self.player_location else ""
+            debug_info.append(f"  {room_id}: pos=({room.x}, {room.y}), visited={room.visited}, connections={len(room.connections)} exits{current_marker}")
         
         return '\n'.join(debug_info)
     
@@ -319,6 +336,14 @@ class MapSystem:
             if player.location not in self.rooms:
                 x, y = self._get_room_position_from_world(player.location, world)
                 self.add_room(player.location, x, y)
+            else:
+                # Update existing room position if spatial navigator has better coordinates
+                x, y = self._get_room_position_from_world(player.location, world)
+                if (x, y) != (0, 0) and (x, y) != self.room_coordinates.get(player.location, (0, 0)):
+                    self.room_coordinates[player.location] = (x, y)
+                    if player.location in self.rooms:
+                        self.rooms[player.location].x = x
+                        self.rooms[player.location].y = y
             
             self.mark_visited(player.location)
         
@@ -329,6 +354,14 @@ class MapSystem:
                     # Try to get position from spatial navigator, fallback to calculation
                     x, y = self._get_room_position_from_world(room_id, world)
                     self.add_room(room_id, x, y)
+                else:
+                    # Update existing room position if spatial navigator has better coordinates
+                    x, y = self._get_room_position_from_world(room_id, world)
+                    if (x, y) != (0, 0) and (x, y) != self.room_coordinates.get(room_id, (0, 0)):
+                        self.room_coordinates[room_id] = (x, y)
+                        if room_id in self.rooms:
+                            self.rooms[room_id].x = x
+                            self.rooms[room_id].y = y
                 self.mark_visited(room_id)
         
         # Update room connections from world

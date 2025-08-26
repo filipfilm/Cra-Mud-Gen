@@ -203,13 +203,13 @@ QUEST_DESCRIPTION: [Brief description of what this quest is about - 1 sentence]
 OBJECTIVE_1_TYPE: [COLLECT/TRAVEL/INTERACT/SOLVE/DEFEAT/DISCOVER]
 OBJECTIVE_1_DESC: [What the player needs to do - be specific]
 OBJECTIVE_1_TARGET: [What they're interacting with - single word/phrase]
-OBJECTIVE_1_COUNT: [Number needed, or 1 if not applicable]
+OBJECTIVE_1_COUNT: [Number needed - must be a digit (1, 2, 3, etc), use 1 if not applicable]
 OBJECTIVE_1_HINT1: [Helpful hint for completing this objective]
 OBJECTIVE_1_HINT2: [Second helpful hint]
 OBJECTIVE_2_TYPE: [COLLECT/TRAVEL/INTERACT/SOLVE/DEFEAT/DISCOVER]
 OBJECTIVE_2_DESC: [What the player needs to do - be specific]
 OBJECTIVE_2_TARGET: [What they're interacting with - single word/phrase]
-OBJECTIVE_2_COUNT: [Number needed, or 1 if not applicable]
+OBJECTIVE_2_COUNT: [Number needed - must be a digit (1, 2, 3, etc), use 1 if not applicable]
 OBJECTIVE_2_HINT1: [Helpful hint for completing this objective]
 OBJECTIVE_2_HINT2: [Second helpful hint]
 [Continue with OBJECTIVE_3 and OBJECTIVE_4 if needed]
@@ -299,7 +299,14 @@ Make objectives specific, actionable, and fitting the story beat's theme and set
                 }
                 
                 obj_type = type_map.get(obj_data['type'], ObjectiveType.DISCOVER)
-                target_count = int(obj_data.get('count', '1'))
+                
+                # Handle count field with fallback for non-numeric values
+                count_value = obj_data.get('count', '1').strip()
+                try:
+                    target_count = int(count_value)
+                except ValueError:
+                    # Handle cases where LLM returns non-numeric values like "varies", "multiple", etc.
+                    target_count = 1
                 
                 # Collect hints
                 hints = []

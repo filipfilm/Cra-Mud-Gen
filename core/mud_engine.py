@@ -319,6 +319,11 @@ Type your answer or use 'hints' for clues.
             self.map_system.sync_with_world(self.world, self.player)
             map_display = self.map_system.generate_ascii_map()
             self.ui.display_message(map_display)
+        elif result["type"] == "debug_map":
+            # Display debug information about map state
+            self.map_system.sync_with_world(self.world, self.player)
+            debug_info = self.map_system.debug_map_state()
+            self.ui.display_message("DEBUG MAP STATE:\n" + debug_info)
         elif result["type"] == "stats":
             # Display exploration statistics
             stats = self.map_system.get_exploration_stats()

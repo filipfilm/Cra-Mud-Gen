@@ -105,6 +105,9 @@ class CommandProcessor:
         elif re.match(self.commands["map"], user_input):
             return {"type": "map", "message": "Showing map"}
             
+        elif re.match(r"^debug\s+map\s*$", user_input, re.IGNORECASE):
+            return {"type": "debug_map", "message": "Debug map information"}
+            
         elif re.match(self.commands["attack"], user_input):
             target = re.match(self.commands["attack"], user_input).group(2)
             return {"type": "combat_action", "action": "attack", "target": target}
