@@ -71,8 +71,8 @@ class GameEngine:
         self.economy_system = EconomySystem(self.llm)
         self._setup_merchant_rooms()
         
-        # Initialize quest system
-        self.quest_system = QuestSystem()
+        # Initialize quest system with LLM interface
+        self.quest_system = QuestSystem(self.llm)
         
         # Initialize puzzle system with LLM
         self.puzzle_system = PuzzleSystem(self.llm)
@@ -267,21 +267,33 @@ Type your answer or use 'hints' for clues.
             # Save old location before moving
             old_location = self.player.location
             
+            # Use spatial navigator to determine the actual destination
+            actual_destination = result["new_location"]
+            spatial_connections = self.world.spatial_navigator.get_room_connections(old_location)
+            
+            if result["direction"] in spatial_connections:
+                # Use the spatial navigator's destination
+                actual_destination = spatial_connections[result["direction"]]
+            
             # Generate new room if needed with spatial context
-            if result["new_location"] not in self.world.rooms:
+            if actual_destination not in self.world.rooms:
                 new_room = self.world.generate_room(
-                    result["new_location"], 
+                    actual_destination, 
                     self.player.theme, 
                     from_room=old_location,
                     direction=result["direction"]
                 )
-                self.world.rooms[result["new_location"]] = new_room
+                self.world.rooms[actual_destination] = new_room
+            
+            # Update the result to use the actual destination
+            result["new_location"] = actual_destination
             
             # Update player location using the new method that tracks exploration
             self.player.move_to_location(result["new_location"])
             
-            # Update map system
+            # Update map system with spatial navigator data
             self.map_system.move_player(result["new_location"])
+            self._sync_map_with_spatial_navigator()
             
             # Add movement to context manager
             self.context_manager.add_movement(
@@ -415,6 +427,8 @@ Type 'map' to see your dungeon map!
             self._handle_quest_hints()
         elif result["type"] == "solve":
             self._handle_puzzle_attempt(result["answer"])
+        elif result["type"] == "debug":
+            self._handle_debug_command()
         elif result["type"] == "invalid":
             self.ui.display_error(result["message"])
         
@@ -428,7 +442,7 @@ Type 'map' to see your dungeon map!
             if self.turn_counter % 10 == 0:
                 self.save_system.autosave(
                     self.player, self.world, self.story_engine,
-                    self.combat_system, self.conversation_system
+                    self.combat_system, self.conversation_system, self.quest_system
                 )
     
     def _display_game_state(self):
@@ -1142,7 +1156,7 @@ Type 'map' to see your dungeon map!
         """Handle saving the game"""
         success = self.save_system.save_game(
             self.player, self.world, self.story_engine, 
-            self.combat_system, self.conversation_system, save_name
+            self.combat_system, self.conversation_system, self.quest_system, save_name
         )
         if success:
             self.ui.display_message("💾 Game saved successfully!")
@@ -1192,7 +1206,7 @@ Type 'map' to see your dungeon map!
         """Handle quick save"""
         success = self.save_system.quick_save(
             self.player, self.world, self.story_engine,
-            self.combat_system, self.conversation_system
+            self.combat_system, self.conversation_system, self.quest_system
         )
         if success:
             self.ui.display_message("⚡ Quick save completed!")
@@ -1288,6 +1302,10 @@ Type 'map' to see your dungeon map!
                     self.conversation_system.context.last_topic = context.get('last_topic')
                     self.conversation_system.context.conversation_active = context.get('conversation_active', False)
             
+            # Restore quest system state if available
+            if 'quests' in save_data and save_data['quests']:
+                self._restore_quest_system(save_data['quests'])
+            
             # Update map system with current player location
             self.map_system.set_player_location(self.player.location)
             
@@ -1296,6 +1314,97 @@ Type 'map' to see your dungeon map!
         except Exception as e:
             self.ui.display_error(f"Error restoring game state: {e}")
             print(f"Restore error: {e}")  # Debug info
+    
+    def _restore_quest_system(self, quest_data: Dict[str, Any]):
+        """Restore quest system state from save data"""
+        try:
+            from core.quest_system import Quest, QuestObjective, QuestStatus, ObjectiveType
+            
+            # Clear current quest system state
+            self.quest_system.quests.clear()
+            self.quest_system.active_quests.clear()
+            self.quest_system.completed_quests.clear()
+            
+            # Restore quest lists
+            self.quest_system.active_quests = quest_data.get('active_quests', [])
+            self.quest_system.completed_quests = quest_data.get('completed_quests', [])
+            
+            # Restore individual quests
+            for quest_id, quest_info in quest_data.get('quests', {}).items():
+                # Restore quest objectives
+                objectives = []
+                for obj_data in quest_info.get('objectives', []):
+                    objective = QuestObjective(
+                        id=obj_data['id'],
+                        description=obj_data['description'],
+                        type=ObjectiveType(obj_data['type']),
+                        target=obj_data['target'],
+                        target_count=obj_data['target_count'],
+                        current_progress=obj_data['current_progress'],
+                        completed=obj_data['completed'],
+                        hints=obj_data['hints']
+                    )
+                    objectives.append(objective)
+                
+                # Create quest object
+                quest = Quest(
+                    id=quest_info['id'],
+                    title=quest_info['title'],
+                    description=quest_info['description'],
+                    objectives=objectives,
+                    status=QuestStatus(quest_info['status']),
+                    rewards=quest_info['rewards'],
+                    story_beat_index=quest_info['story_beat_index']
+                )
+                
+                self.quest_system.quests[quest_id] = quest
+            
+            print(f"Restored {len(self.quest_system.quests)} quests ({len(self.quest_system.active_quests)} active)")
+            
+        except Exception as e:
+            print(f"Error restoring quest system: {e}")
+    
+    def _sync_map_with_spatial_navigator(self):
+        """Sync the ASCII map system with spatial navigator coordinates"""
+        try:
+            # Update map system with spatial navigator room positions
+            for room_id, position in self.world.spatial_navigator.room_positions.items():
+                x, y, z = position
+                # Map system uses 2D coordinates, so we use x,y and ignore z for now
+                if room_id not in self.map_system.room_coordinates or self.map_system.room_coordinates[room_id] != (x, y):
+                    self.map_system.room_coordinates[room_id] = (x, y)
+                    if room_id not in self.map_system.rooms:
+                        from core.map_system import Room as MapRoom
+                        self.map_system.rooms[room_id] = MapRoom(room_id, x, y)
+            
+            # Update connections in map system
+            for room_id, connections in self.world.spatial_navigator.room_connections.items():
+                if room_id in self.map_system.rooms:
+                    self.map_system.rooms[room_id].connections = connections.copy()
+        except Exception as e:
+            print(f"Error syncing map with spatial navigator: {e}")
+    
+    def _handle_debug_command(self):
+        """Handle debug command to show spatial navigation info"""
+        debug_info = self.world.spatial_navigator.get_debug_info()
+        validation_issues = self.world.spatial_navigator.validate_connections()
+        
+        debug_message = f"""
+=== SPATIAL NAVIGATION DEBUG ===
+{debug_info}
+
+=== VALIDATION RESULTS ===
+Missing reverse connections: {len(validation_issues['missing_reverse'])}
+Position mismatches: {len(validation_issues['position_mismatch'])}
+Dangling connections: {len(validation_issues['dangling_connections'])}
+
+Current room spatial connections:
+{self.world.spatial_navigator.get_room_connections(self.player.location)}
+
+Use 'map' to see the visual representation.
+        """
+        
+        self.ui.display_message(debug_message.strip())
     
     def _handle_craft_item(self, recipe_name: str):
         """Handle crafting an item"""

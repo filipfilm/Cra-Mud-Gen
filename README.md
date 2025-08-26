@@ -1,177 +1,238 @@
 # Cra-mud-gen
 
-A crazy MUD generator with AI-powered storytelling that creates unique narrative-driven dungeons every time, featuring:
-- Procedurally generated dungeons and themes
-- Local LLM integration for natural language responses
-- Text-to-image generation capabilities
-- Multiple theme options (Fantasy, Sci-Fi, Horror, Cyberpunk)
-- Turn-based combat system with enemies and experience
-- Interactive NPC conversations
-- ASCII art generation for rooms and items
+An AI-powered text adventure game that creates unique narrative-driven dungeons using local LLM integration. Features dynamic story generation, intelligent quest systems, and spatially consistent dungeon exploration.
 
 ## Features
 
 ### Core Gameplay
-- Text-based adventure with natural language commands
-- Procedurally generated dungeon layouts with spatial awareness
-- Multiple game themes with unique content and mechanics
-- Player character management (health, inventory, experience, leveling)
-- Turn-based tactical combat with enemies and status effects
-- Exploration tracking with dungeon map visualization
+- **Text-based adventure** with natural language commands
+- **Procedurally generated dungeons** with logical spatial navigation
+- **Multiple game themes** (Fantasy, Sci-Fi, Horror, Cyberpunk) with theme-appropriate content
+- **Dynamic story seed generation** - AI creates unique story concepts with characters, conflicts, and narrative beats
+- **Player progression** - health, inventory, experience, leveling system
+- **Turn-based tactical combat** with status effects and enemy AI
 
-### Interactive Elements
-- NPC conversations with dialogue trees and personality systems
-- Item examination with ASCII art and descriptions
-- Inventory management with item usage and dropping
-- Environmental feature examination (walls, doors, etc.)
+### AI-Powered Systems
+- **Story seed generation** - LLM creates unique narrative premises with characters and plot
+- **Quest system** - Fully LLM-driven quest generation from story beats (no hardcoded content)
+- **Dynamic content generation** - Rooms, items, NPCs, and descriptions created by AI
+- **Intelligent puzzles** - LLM-generated riddles and challenges that fit the theme
+- **Contextual conversations** - NPCs with AI-driven personalities and dialogue
 
-### Technology Stack
+### Advanced Features
+- **Spatial navigation** - Logically consistent dungeon layout (north/south/east/west work properly)
+- **ASCII map system** - Visual dungeon mapping with exploration tracking  
+- **Save/load system** - Complete game state persistence including quest progress
+- **Crafting system** - Item creation with skill progression
+- **Economy system** - Dynamic market with merchants, haggling, and economic events
+- **Narrative choice system** - Meaningful story decisions with consequences
+
+## Technology Stack
+
 - **Python 3.8+** - Primary development language
-- **Local LLMs** - Qwen, Llama, or similar models (via llama-cpp-python)
-- **ComfyUI** - Text-to-image generation system (optional)
-- **Rich/Prompt Toolkit** - Terminal UI components (optional)
-- **JSON** - Data persistence and configuration
+- **Ollama** - Local LLM integration (supports Mistral, Llama, Qwen, etc.)
+- **Requests** - HTTP client for Ollama API communication
+- **JSON** - Data persistence and save system
 
 ## Project Structure
 
 ```
 cra-mud-gen/
-├── main.py                 # Main entry point
-├── requirements.txt        # Project dependencies
-├── README.md               # This file
+├── main.py                      # Main entry point with model selection
+├── requirements.txt             # Minimal dependencies (only requests)
+├── README.md                    # This file
 ├── core/
-│   ├── mud_engine.py       # Main game engine
-│   ├── player.py           # Player state management
-│   ├── world.py            # World and dungeon generation
-│   ├── room.py             # Room representation
-│   ├── theme_manager.py    # Theme handling
-│   ├── command_processor.py # Command parsing and execution
-│   ├── combat_system.py    # Combat mechanics and turn-based system
-│   ├── enemy_spawner.py    # Enemy generation and spawning
-│   ├── conversation_system.py # NPC dialogue system
-│   ├── context_manager.py  # Context tracking for LLMs
-│   └── map_system.py       # Dungeon mapping and exploration tracking
+│   ├── mud_engine.py           # Main game engine and loop
+│   ├── player.py               # Player state and progression
+│   ├── world.py                # World generation with spatial consistency
+│   ├── room.py                 # Room representation
+│   ├── spatial_navigator.py    # Logical navigation system (NEW)
+│   ├── story_seed_generator.py # AI story concept generation
+│   ├── quest_system.py         # LLM-driven quest generation
+│   ├── puzzle_system.py        # Dynamic puzzle creation
+│   ├── crafting_system.py      # Item crafting with skills
+│   ├── economy_system.py       # Market simulation with merchants
+│   ├── combat_system.py        # Turn-based combat mechanics
+│   ├── conversation_system.py  # NPC dialogue system
+│   ├── save_system.py          # Game state persistence
+│   ├── map_system.py           # ASCII dungeon mapping
+│   ├── command_processor.py    # Command parsing and execution
+│   ├── theme_manager.py        # Theme handling and content
+│   ├── dynamic_content_generator.py # LLM content generation
+│   └── context_manager.py      # Context tracking for AI
 ├── ui/
-│   ├── terminal_ui.py      # Terminal-based user interface
-│   ├── combat_ui.py        # Combat-specific UI elements
-│   └── colors.py           # Color and visual effects for terminal
+│   ├── terminal_ui.py          # Main terminal interface
+│   ├── combat_ui.py            # Combat-specific UI
+│   ├── seed_ui.py              # Story seed generation interface
+│   ├── contextual_effects.py   # Dynamic UI effects
+│   └── colors.py               # Terminal colors and styling
 ├── llm/
-│   ├── llm_interface.py    # LLM integration layer
-│   └── ollama_llm.py       # Ollama-specific LLM implementation
-├── image_generation/
-│   └── image_bridge.py     # ComfyUI integration for image generation
-└── procedural/
-    └── __init__.py         # Procedural generation utilities (if any)
+│   ├── llm_interface.py        # LLM integration layer
+│   └── ollama_llm.py           # Ollama-specific implementation
+└── saves/                      # Save game directory (auto-created)
 ```
 
 ## Getting Started
 
-1. **Prerequisites**:
-   - Python 3.8 or higher
-   - ComfyUI (for image generation) - optional but recommended
+### Prerequisites
+- **Python 3.8+**
+- **Ollama** - For local LLM support
+  ```bash
+  # Install Ollama (macOS/Linux)
+  curl -fsSL https://ollama.ai/install.sh | sh
+  
+  # Install a model (choose one)
+  ollama pull mistral           # 7B - Good for storytelling
+  ollama pull llama3.1          # 8B - Great general purpose  
+  ollama pull gemma2:2b         # 2B - Fast and lightweight
+  
+  # Start Ollama server
+  ollama serve
+  ```
 
-2. **Installation**:
-   ```bash
-   # Clone the repository (if applicable)
-   git clone <repository-url>
-   
-   # Install dependencies
-   pip install -r requirements.txt
-   ```
+### Installation
+```bash
+# Clone or download the project
+cd cra-mud-gen
 
-3. **Running the Game**:
-   ```bash
-   python main.py
-   ```
+# Install minimal dependencies
+pip install -r requirements.txt
+```
+
+### Running the Game
+```bash
+python main.py
+
+# Optional: Enable fallback mode if LLM fails
+python main.py --fallback-mode
+```
 
 ## Game Commands
 
-### Basic Movement and Exploration
-- `go <direction>` - Move in a direction (north, south, east, west, up, down)
-- `look/l` - Look around the current room
-- `inventory/i` - Show your inventory
-- `take/get <item>` - Take an item from the room
-- `use <item>` - Use an item from your inventory
-- `help/h` - Show available commands
-- `quit/q` - Exit the game
-
-### Combat Commands
-- `attack <enemy>` - Attack an enemy in combat
-- `defend/guard` - Take defensive stance (reduces damage)
-- `flee/run` - Attempt to flee from combat
-- `heal` - Use a healing potion if you have one
-
-### Conversation Commands
-- `talk to <npc>` - Start a conversation with an NPC
-- `hello <npc>` - Greet an NPC
-- `goodbye` - End current conversation
-
-### Map and Stats Commands
-- `map/m` - Show the dungeon map
+### Movement & Exploration
+- `go <direction>` / `north/south/east/west/up/down` - Move around dungeon
+- `look` / `l` - Examine current room
+- `examine <item>` - Look at specific items or room features
+- `map` / `m` - Show ASCII dungeon map
 - `stats` - Show exploration statistics
+
+### Inventory & Items
+- `inventory` / `i` - Show your items
+- `take <item>` / `get <item>` - Pick up items
+- `drop <item>` - Drop items in current room
+- `use <item>` - Use items from inventory
+
+### Quests & Progress
+- `quests` - Show active quest log with objectives and progress
+- `hints` - Get hints for current quest objectives
+
+### Combat
+- `attack <enemy>` - Attack specific enemy
+- `defend` / `guard` - Defensive stance
+- `flee` / `run` - Attempt to escape
+- `heal` - Use healing potions
+
+### Crafting & Economy
+- `craft <recipe>` - Create items (if recipe known)
+- `recipes` - Show known crafting recipes
+- `skills` - Show crafting skill levels
+- `trade` - Talk to merchant in current room
+- `shop` - Browse merchant inventory
+- `buy <item>` / `sell <item>` - Trade with merchants
+- `haggle <item>` - Negotiate prices
+
+### Conversations & NPCs
+- `talk to <npc>` - Start conversation
+- `hello <npc>` - Greet NPCs
+
+### Save System
+- `save [name]` - Save game with optional name
+- `load [name]` - Load saved game (shows list if no name)
+- `quicksave` - Fast save to dedicated slot
+- `quickload` - Fast load from quicksave
+- `saves` - List all saved games
+
+### Puzzles
+- `solve <answer>` - Attempt to solve active puzzle
+- Answer directly - Many puzzle responses work without "solve" prefix
+
+### System Commands
+- `help` / `h` - Show available commands
+- `quit` / `q` - Exit game
+- `debug` - Show spatial navigation debug info
 
 ## Themes
 
-The game supports multiple themes:
-1. **Fantasy** - Mystical worlds with magic and ancient artifacts
-2. **Sci-Fi** - Futuristic settings with technology and space
-3. **Horror** - Dark, terrifying environments with supernatural threats
-4. **Cyberpunk** - Neon-lit dystopian futures with advanced tech
+Each theme provides unique content, enemies, items, and atmosphere:
+
+1. **Fantasy** - Mystical realms with magic, dragons, and ancient artifacts
+2. **Sci-Fi** - Space stations, alien technology, and futuristic conflicts  
+3. **Horror** - Dark supernatural environments with terrifying creatures
+4. **Cyberpunk** - Neon-lit dystopian cities with hackers and corporations
+
+Themes are automatically detected and applied based on your story seed, or you can select manually.
+
+## Key Features Deep Dive
+
+### Story Seed Generation
+The game uses AI to create unique story concepts including:
+- **Setting & Theme** - The world and atmosphere
+- **Characters** - Key NPCs with backgrounds and motivations
+- **Conflict** - Central story tension and plot
+- **Story Beats** - Progressive narrative moments that become quests
+
+### Spatial Navigation System  
+Unlike many text games, Cra-mud-gen has **logically consistent navigation**:
+- Going north then south returns you to the original room
+- Maps accurately represent room positions
+- No more confusing "the north exit leads to the room south of here" problems
+
+### LLM-Driven Quests
+Quests are generated dynamically from story beats with:
+- Theme-appropriate objectives (collect data chips in sci-fi, find artifacts in fantasy)
+- Contextual hints and descriptions  
+- Progress tracking with meaningful rewards
+- No hardcoded fantasy-only content
+
+### Save System
+Complete persistence of:
+- Player progress and stats
+- World state and room generation
+- Quest progress and completion
+- Conversation history and NPC relationships
+- Crafting progress and discovered recipes
 
 ## Architecture
 
-The game follows a modular architecture:
-1. **Engine Core** - Main game loop and state management
-2. **Command Processor** - Parses and executes player commands
-3. **Procedural Generator** - Creates unique game worlds with spatial awareness
-4. **LLM Interface** - Integrates local language models for immersive responses
-5. **Image Generator** - Connects to ComfyUI for visual content (optional)
-6. **User Interface** - Terminal-based display and input with rich visual effects
-7. **Combat System** - Turn-based tactical combat mechanics
-8. **Conversation System** - NPC dialogue and personality management
+The game uses a modular architecture with:
 
-## Combat System
+1. **Game Engine** (`mud_engine.py`) - Main game loop and state management
+2. **Spatial Navigator** (`spatial_navigator.py`) - Logical dungeon layout system
+3. **LLM Integration** (`llm/`) - Local language model communication
+4. **Content Generation** - AI-driven creation of stories, quests, rooms, items
+5. **Save System** - Complete game state persistence
+6. **UI Layer** - Terminal-based interface with rich visual effects
 
-The game features a turn-based combat system with:
-- Health management and damage calculation
-- Status effects (poison, burn, etc.)
-- Experience and leveling progression
-- Loot and gold rewards from defeated enemies
-- Tactical decision-making for both player and enemies
+## Development
 
-## NPC Conversations
-
-Interact with NPCs in the game world:
-- Weapons Master - Provides information about weapons and armor
-- Fortune Teller - Offers mystical insights and predictions
-- Other theme-appropriate NPCs with unique dialogue trees
-
-## ASCII Art and Visual Effects
-
-The game includes:
-- ASCII art generation for rooms, items, and enemies
-- Theme-appropriate visual effects and color schemes
-- Status bars and health indicators
-- Animated effects for immersive gameplay
-
-## Future Enhancements
-
-- Multiplayer support (local network)
-- Save/load game state functionality
-- Enhanced theme customization
-- Web-based UI alternative
-- Sound effects and audio integration
-- Advanced LLM features (function calling)
-- Dynamic theme progression during gameplay
+The game is designed to be:
+- **Modular** - Easy to extend with new features
+- **Theme-agnostic** - Content adapts to any theme automatically
+- **LLM-first** - AI generates most content dynamically
+- **Spatially consistent** - Logical navigation and mapping
 
 ## Contributing
 
 1. Fork the repository
-2. Create a feature branch
-3. Commit your changes
-4. Push to the branch
-5. Create a Pull Request
+2. Create a feature branch (`git checkout -b feature/amazing-feature`)
+3. Commit changes (`git commit -m 'Add amazing feature'`)
+4. Push to branch (`git push origin feature/amazing-feature`)
+5. Open a Pull Request
 
 ## License
 
-This project is licensed under the MIT License - see the LICENSE file for details.
+MIT License - see LICENSE file for details.
+
+---
+
+**Note**: This project emphasizes local LLM usage for privacy and offline play. All AI features work with locally-run models via Ollama.

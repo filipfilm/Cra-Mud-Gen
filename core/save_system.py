@@ -19,7 +19,7 @@ class SaveSystem:
         self.quicksave_file = "quicksave.json"
     
     def save_game(self, player, world, story_engine=None, combat_system=None, 
-                  conversation_system=None, save_name: str = None) -> bool:
+                  conversation_system=None, quest_system=None, save_name: str = None) -> bool:
         """Save complete game state to file"""
         try:
             # Generate save filename if not provided
@@ -45,7 +45,8 @@ class SaveSystem:
                 'world': self._serialize_world(world),
                 'story': self._serialize_story_engine(story_engine),
                 'combat': self._serialize_combat_system(combat_system),
-                'conversation': self._serialize_conversation_system(conversation_system)
+                'conversation': self._serialize_conversation_system(conversation_system),
+                'quests': self._serialize_quest_system(quest_system)
             }
             
             # Write to file with pretty formatting
@@ -91,20 +92,20 @@ class SaveSystem:
             return None
     
     def quick_save(self, player, world, story_engine=None, combat_system=None, 
-                   conversation_system=None) -> bool:
+                   conversation_system=None, quest_system=None) -> bool:
         """Quick save to dedicated slot"""
         return self.save_game(player, world, story_engine, combat_system, 
-                            conversation_system, self.quicksave_file)
+                            conversation_system, quest_system, self.quicksave_file)
     
     def quick_load(self) -> Optional[Dict[str, Any]]:
         """Quick load from dedicated slot"""
         return self.load_game(self.quicksave_file)
     
     def autosave(self, player, world, story_engine=None, combat_system=None, 
-                 conversation_system=None) -> bool:
+                 conversation_system=None, quest_system=None) -> bool:
         """Automatic save (called periodically)"""
         return self.save_game(player, world, story_engine, combat_system, 
-                            conversation_system, self.autosave_file)
+                            conversation_system, quest_system, self.autosave_file)
     
     def list_saves(self) -> List[Dict[str, str]]:
         """List all available save files with metadata"""
@@ -238,6 +239,44 @@ class SaveSystem:
                 'last_topic': conversation_system.context.last_topic,
                 'conversation_active': conversation_system.context.conversation_active
             }
+        }
+    
+    def _serialize_quest_system(self, quest_system) -> Dict[str, Any]:
+        """Serialize quest system data"""
+        if not quest_system:
+            return {}
+        
+        # Serialize all quests
+        serialized_quests = {}
+        for quest_id, quest in quest_system.quests.items():
+            # Serialize quest objectives
+            serialized_objectives = []
+            for obj in quest.objectives:
+                serialized_objectives.append({
+                    'id': obj.id,
+                    'description': obj.description,
+                    'type': obj.type.value,
+                    'target': obj.target,
+                    'target_count': obj.target_count,
+                    'current_progress': obj.current_progress,
+                    'completed': obj.completed,
+                    'hints': obj.hints.copy()
+                })
+            
+            serialized_quests[quest_id] = {
+                'id': quest.id,
+                'title': quest.title,
+                'description': quest.description,
+                'objectives': serialized_objectives,
+                'status': quest.status.value,
+                'rewards': quest.rewards.copy(),
+                'story_beat_index': quest.story_beat_index
+            }
+        
+        return {
+            'quests': serialized_quests,
+            'active_quests': quest_system.active_quests.copy(),
+            'completed_quests': quest_system.completed_quests.copy()
         }
     
     def _validate_save_data(self, save_data: Dict[str, Any]) -> bool:

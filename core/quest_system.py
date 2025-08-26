@@ -80,10 +80,11 @@ class Quest:
 class QuestSystem:
     """Manages all quests and quest progression"""
     
-    def __init__(self):
+    def __init__(self, llm_interface=None):
         self.quests: Dict[str, Quest] = {}
         self.active_quests: List[str] = []  # Quest IDs that are currently active
         self.completed_quests: List[str] = []
+        self.llm = llm_interface
         
     def add_quest(self, quest: Quest) -> bool:
         """Add a new quest to the system"""
@@ -176,9 +177,168 @@ class QuestSystem:
         return quests
     
     def _parse_story_beat_to_quest(self, beat: str, index: int) -> Optional[Quest]:
-        """Parse a story beat into a quest with objectives"""
-        beat_lower = beat.lower()
+        """Generate a fully dynamic quest using LLM based on story beat"""
+        if not self.llm:
+            return self._create_fallback_quest(beat, index)
         
+        try:
+            return self._generate_dynamic_quest(beat, index)
+        except Exception as e:
+            print(f"Failed to generate dynamic quest: {e}")
+            return self._create_fallback_quest(beat, index)
+    
+    def _generate_dynamic_quest(self, beat: str, index: int) -> Optional[Quest]:
+        """Generate a quest using LLM based on story beat context"""
+        
+        prompt = f"""Convert this story beat into a detailed quest with specific objectives:
+
+STORY BEAT: "{beat}"
+
+Create a quest that breaks down this story beat into 2-4 actionable objectives that the player can complete step by step.
+
+Provide your response in this EXACT format:
+
+QUEST_TITLE: [Clear, engaging quest title]
+QUEST_DESCRIPTION: [Brief description of what this quest is about - 1 sentence]
+OBJECTIVE_1_TYPE: [COLLECT/TRAVEL/INTERACT/SOLVE/DEFEAT/DISCOVER]
+OBJECTIVE_1_DESC: [What the player needs to do - be specific]
+OBJECTIVE_1_TARGET: [What they're interacting with - single word/phrase]
+OBJECTIVE_1_COUNT: [Number needed, or 1 if not applicable]
+OBJECTIVE_1_HINT1: [Helpful hint for completing this objective]
+OBJECTIVE_1_HINT2: [Second helpful hint]
+OBJECTIVE_2_TYPE: [COLLECT/TRAVEL/INTERACT/SOLVE/DEFEAT/DISCOVER]
+OBJECTIVE_2_DESC: [What the player needs to do - be specific]
+OBJECTIVE_2_TARGET: [What they're interacting with - single word/phrase]
+OBJECTIVE_2_COUNT: [Number needed, or 1 if not applicable]
+OBJECTIVE_2_HINT1: [Helpful hint for completing this objective]
+OBJECTIVE_2_HINT2: [Second helpful hint]
+[Continue with OBJECTIVE_3 and OBJECTIVE_4 if needed]
+
+Example:
+QUEST_TITLE: Infiltrate Corporate Database
+QUEST_DESCRIPTION: Break into StellarCon's secure servers to steal classified data
+OBJECTIVE_1_TYPE: INTERACT
+OBJECTIVE_1_DESC: Access a security terminal to disable alarms
+OBJECTIVE_1_TARGET: terminal
+OBJECTIVE_1_COUNT: 1
+OBJECTIVE_1_HINT1: Look for terminals near entrance areas
+OBJECTIVE_1_HINT2: Terminals may require hacking skills
+OBJECTIVE_2_TYPE: COLLECT
+OBJECTIVE_2_DESC: Gather three data chips from different server rooms
+OBJECTIVE_2_TARGET: data_chip
+OBJECTIVE_2_COUNT: 3
+OBJECTIVE_2_HINT1: Server rooms are usually well-guarded
+OBJECTIVE_2_HINT2: Data chips may be hidden in server cabinets
+
+Make objectives specific, actionable, and fitting the story beat's theme and setting."""
+
+        try:
+            # Get LLM response
+            if hasattr(self.llm, 'llm'):
+                response = self.llm.llm.generate_response(prompt)
+            else:
+                response = self.llm.generate_response(prompt)
+                
+            # Parse the response into a quest
+            return self._parse_llm_quest_response(response, beat, index)
+            
+        except Exception as e:
+            print(f"Error generating quest with LLM: {e}")
+            return None
+    
+    def _parse_llm_quest_response(self, response: str, beat: str, index: int) -> Optional[Quest]:
+        """Parse LLM response into a Quest object"""
+        try:
+            lines = response.strip().split('\n')
+            quest_data = {}
+            objectives_data = []
+            current_obj = {}
+            
+            for line in lines:
+                if ':' in line:
+                    key, value = line.split(':', 1)
+                    key = key.strip().upper()
+                    value = value.strip()
+                    
+                    if key.startswith('OBJECTIVE_') and key.endswith('_TYPE'):
+                        # Start new objective
+                        if current_obj:
+                            objectives_data.append(current_obj)
+                        obj_num = key.split('_')[1]
+                        current_obj = {'num': obj_num, 'type': value}
+                    elif key.startswith('OBJECTIVE_') and current_obj:
+                        # Add to current objective
+                        field = key.split('_', 2)[2]  # Get DESC, TARGET, COUNT, HINT1, HINT2
+                        current_obj[field.lower()] = value
+                    elif key in ['QUEST_TITLE', 'QUEST_DESCRIPTION']:
+                        quest_data[key.lower()] = value
+            
+            # Add the last objective
+            if current_obj:
+                objectives_data.append(current_obj)
+            
+            # Validate required fields
+            if not quest_data.get('quest_title') or not objectives_data:
+                print("Missing required quest fields")
+                return None
+            
+            # Create objectives
+            objectives = []
+            for obj_data in objectives_data:
+                if not all(k in obj_data for k in ['type', 'desc', 'target']):
+                    continue
+                    
+                # Map type strings to enums
+                type_map = {
+                    'COLLECT': ObjectiveType.COLLECT,
+                    'TRAVEL': ObjectiveType.TRAVEL,
+                    'INTERACT': ObjectiveType.INTERACT,
+                    'SOLVE': ObjectiveType.SOLVE,
+                    'DEFEAT': ObjectiveType.DEFEAT,
+                    'DISCOVER': ObjectiveType.DISCOVER
+                }
+                
+                obj_type = type_map.get(obj_data['type'], ObjectiveType.DISCOVER)
+                target_count = int(obj_data.get('count', '1'))
+                
+                # Collect hints
+                hints = []
+                for hint_key in ['hint1', 'hint2', 'hint3']:
+                    if hint_key in obj_data and obj_data[hint_key]:
+                        hints.append(obj_data[hint_key])
+                
+                objective = QuestObjective(
+                    id=f"obj_{index}_{len(objectives)}",
+                    description=obj_data['desc'],
+                    type=obj_type,
+                    target=obj_data['target'],
+                    target_count=target_count,
+                    hints=hints
+                )
+                objectives.append(objective)
+            
+            # Create quest
+            quest = Quest(
+                id=f"llm_quest_{index}",
+                title=quest_data['quest_title'],
+                description=quest_data.get('quest_description', beat),
+                objectives=objectives,
+                story_beat_index=index,
+                rewards={
+                    "experience": 50 + (index * 25),
+                    "gold": 100 + (index * 50),
+                    "items": [f"quest_reward_{index}"]
+                }
+            )
+            
+            return quest
+            
+        except Exception as e:
+            print(f"Error parsing LLM quest response: {e}")
+            return None
+    
+    def _create_fallback_quest(self, beat: str, index: int) -> Quest:
+        """Create a simple fallback quest when LLM is unavailable"""
         # Extract quest title (usually before colon)
         if ":" in beat:
             title = beat.split(":")[0].strip("*").strip()
@@ -187,82 +347,22 @@ class QuestSystem:
             title = f"Story Goal {index + 1}"
             description = beat.strip("*").strip()
         
-        quest = Quest(
-            id=f"story_quest_{index}",
-            title=title,
-            description=description,
-            story_beat_index=index
+        # Create simple fallback objective
+        objective = QuestObjective(
+            id=f"fallback_obj_{index}",
+            description=f"Complete: {title}",
+            type=ObjectiveType.DISCOVER,
+            target="goal",
+            hints=["Explore the area and interact with objects", "Look for clues related to your objective"]
         )
         
-        # Parse objectives based on keywords
-        objectives = []
+        quest = Quest(
+            id=f"fallback_quest_{index}",
+            title=title,
+            description=description,
+            objectives=[objective],
+            story_beat_index=index,
+            rewards={"experience": 25, "gold": 50}
+        )
         
-        if "find" in beat_lower or "locate" in beat_lower:
-            if "entrance" in beat_lower or "door" in beat_lower:
-                objectives.append(QuestObjective(
-                    id=f"find_entrance_{index}",
-                    description="Find the hidden entrance",
-                    type=ObjectiveType.DISCOVER,
-                    target="entrance",
-                    hints=["Look for celestial symbols or hidden mechanisms"]
-                ))
-            elif "crystals" in beat_lower or "crystal" in beat_lower:
-                objectives.append(QuestObjective(
-                    id=f"collect_crystals_{index}",
-                    description="Collect luminescent crystals",
-                    type=ObjectiveType.COLLECT,
-                    target="crystal",
-                    target_count=5,
-                    hints=["Crystals may be scattered throughout the cavern"]
-                ))
-        
-        if "solve" in beat_lower and "puzzle" in beat_lower:
-            objectives.append(QuestObjective(
-                id=f"solve_puzzle_{index}",
-                description="Solve the celestial puzzle",
-                type=ObjectiveType.SOLVE,
-                target="puzzle",
-                hints=["Study the constellation patterns on the wall"]
-            ))
-        
-        if "unlock" in beat_lower or "open" in beat_lower:
-            if "chamber" in beat_lower:
-                objectives.append(QuestObjective(
-                    id=f"unlock_chamber_{index}",
-                    description="Unlock the Starlight Chamber",
-                    type=ObjectiveType.INTERACT,
-                    target="chamber",
-                    hints=["Listen for musical notes from wind chimes"]
-                ))
-        
-        if "activate" in beat_lower:
-            if "map" in beat_lower:
-                objectives.append(QuestObjective(
-                    id=f"activate_map_{index}",
-                    description="Activate the celestial map",
-                    type=ObjectiveType.INTERACT,
-                    target="map",
-                    hints=["Align the map with current night sky patterns"]
-                ))
-        
-        if "claim" in beat_lower or "retrieve" in beat_lower:
-            if "orb" in beat_lower:
-                objectives.append(QuestObjective(
-                    id=f"claim_orb_{index}",
-                    description="Claim the Starlight Orb",
-                    type=ObjectiveType.COLLECT,
-                    target="orb",
-                    hints=["Escape before protective wards reset"]
-                ))
-        
-        # Default objective if no specific ones found
-        if not objectives:
-            objectives.append(QuestObjective(
-                id=f"complete_goal_{index}",
-                description=title,
-                type=ObjectiveType.DISCOVER,
-                target="goal"
-            ))
-        
-        quest.objectives = objectives
         return quest
