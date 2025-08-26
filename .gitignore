@@ -104,5 +104,6 @@ image_cache/
 *.bak
 *~
 *.tmp
+
+# Continue.dev files
 .continue/assistants/new-assistant.yaml
-.gitignore

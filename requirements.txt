@@ -1,31 +1,20 @@
 # Requirements for Cra-mud-gen
-# This file lists the dependencies needed to run the game
+# Minimal dependencies for the MUD game
 
-# Core Python libraries (usually included with Python 3.8+)
-# No additional core dependencies required
+# Required dependencies
+requests>=2.25.0          # For Ollama LLM API communication
 
-# For terminal UI (optional, can be installed if needed)
-rich>=10.0.0
-prompt_toolkit>=3.0.0
+# Optional dependencies (uncomment if needed)
+# rich>=10.0.0            # For enhanced terminal UI (not currently used)
+# prompt_toolkit>=3.0.0   # For advanced input handling (not currently used)
+# pillow>=8.0.0           # For image processing (only if using image features)
+# pydantic>=1.0.0         # For data validation (not currently used)
+# colorama>=0.4.0         # For cross-platform color support (not currently used)
 
-# For image generation (if using ComfyUI)
-requests>=2.25.0
+# Development dependencies (optional)
+# pytest>=6.0.0           # For unit testing
 
-# For LLM integration (if using local models)
-# llama-cpp-python>=0.1.0  # Example for local LLMs
-# transformers>=4.0.0       # Example for Hugging Face models
-
-# For image handling (if needed)
-pillow>=8.0.0
-
-# For data validation
-pydantic>=1.0.0
-
-# For color support in terminal (if needed)
-colorama>=0.4.0
-
-# For JSON handling (already part of standard library)
-# json is part of Python's standard library
-
-# For testing
-pytest>=6.0.0  # Optional, for unit tests
+# Notes:
+# - The game uses only Python standard library modules except for requests
+# - dataclasses, typing, json, os, sys, random, etc. are all built-in
+# - Ollama must be installed separately (see README for instructions)
